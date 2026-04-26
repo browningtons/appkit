@@ -12,10 +12,11 @@ import {
   captureUtmParams,
 } from './kit';
 
-// Capture UTMs once on app load (before render, so every event has them).
-captureUtmParams();
-
 export default function App() {
+  // Capture UTMs once per session. Inside the component body so that
+  // KitProvider's setKitConfig() has already run by the time we read it.
+  captureUtmParams();
+
   const config = useKitConfig();
   const auth = useAuth();
 
