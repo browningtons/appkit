@@ -1,5 +1,10 @@
 # appkit
 
+[![License: MIT](https://img.shields.io/github/license/browningtons/appkit)](./LICENSE)
+[![Made with Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vitejs.dev)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev)
+[![Stripe](https://img.shields.io/badge/Stripe-Buy_Button-635BFF?logo=stripe&logoColor=white)](https://stripe.com)
+
 Shared paywall + entitlement starter for shipping small monetized React apps.
 
 Extracted from [Our Family Lizard](https://ourfamilylizard.com). The patterns are battle-tested on a real, paying production app — this repo is the same code, generalized so each new app fills in one config file and ships.
