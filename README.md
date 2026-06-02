@@ -99,4 +99,4 @@ Don't add these speculatively. Add them when an app needs them.
 
 ## License
 
-Private — internal Browningtons use.
+[MIT](./LICENSE) — fork it, ship it, charge for it. Attribution appreciated but not required.
