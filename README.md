@@ -77,29 +77,20 @@ Setup:
 
 ## Starting a new app
 
-The current recommended workflow is **clone-and-customize**, not a published package. Pulling fixes back into existing apps is a manual `git diff src/kit` + paste; that overhead is fine while there are <5 apps using the kit.
+appkit is consumed as a **versioned package**, installed from git and pinned to
+a tag. Security fixes propagate by bumping the version — no copied code to keep
+in sync across apps.
 
 ```bash
-# 1. Clone
-cp -R appkit ~/Documents/Personal\ Projects/Github/my-new-app
-cd ~/Documents/Personal\ Projects/Github/my-new-app
-rm -rf .git && git init
-
-# 2. Configure
-cp kit.config.example.ts kit.config.ts
-$EDITOR kit.config.ts             # Stripe IDs, copy, prefix
-
-# 3. Replace the demo
-$EDITOR src/App.tsx                # build your real app
-$EDITOR index.html                 # title, OG tags
-
-# 4. Stripe + Vercel
-# - Create the product, price, Buy Button, Payment Link in Stripe
-# - Set the env vars in Vercel (STRIPE_SECRET_KEY, STRIPE_PRICE_ID, STRIPE_PRODUCT_ID)
-# - Deploy
-
-# 5. Test the unlock flow with a real Stripe test charge before launch
+npm install github:browningtons/appkit#v1.0.0
 ```
+
+Then wire the client, re-export the API routes in one line each, and set the
+Stripe (and optional Supabase) env vars. Full walkthrough in
+[`ADOPTING.md`](./ADOPTING.md).
+
+This repo doubles as the **demo app** — `npm run dev` runs the showcase; the
+package build (`npm run build:lib`) emits the consumable library to `dist/`.
 
 ## Running the demo locally
 
