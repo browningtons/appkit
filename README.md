@@ -17,6 +17,7 @@ Extracted from [Our Family Lizard](https://ourfamilylizard.com). The patterns ar
 - **`<AdminBar>`** — admin top bar with view-as-user toggle (5-tap on logo to enter admin)
 - **`useAuth()`** — entitlement + admin state, URL-based unlock activation, `requirePro(action, source)` wrapper, manual restore-by-email flow
 - **`api/verify-purchase.ts`** — Vercel serverless route that verifies Stripe Checkout sessions and email-based restores. The restore path is IP rate-limited and uses Stripe Customer search (with a recent-session scan as fallback)
+- **`api/stripe-webhook.ts`** — optional Stripe webhook for durable server-side entitlement (grant on `checkout.session.completed`, revoke on `charge.refunded`). No-op until you set the Supabase env vars — see below
 - **Analytics layer** — UTM capture, Stripe `client_reference_id` decoration, named funnel events on Vercel Analytics
 
 ## Per-app contract: `kit.config.ts`
@@ -42,6 +43,37 @@ STRIPE_SECRET_KEY    # sk_live_... or sk_test_...
 STRIPE_PRICE_ID      # price_...
 STRIPE_PRODUCT_ID    # prod_...
 ```
+
+### Optional: server-entitlement mode
+
+By default entitlement is client-trusted (localStorage + on-demand Stripe
+re-verification). That deters casual non-payment but a determined user can
+bypass it, and it can't survive a closed tab, work across devices, or react to
+refunds. Set these three vars to upgrade an app to **durable, server-side
+entitlement — with no code change**:
+
+```
+SUPABASE_URL                # project URL
+SUPABASE_SERVICE_ROLE_KEY   # service role key (server-only, never shipped to client)
+STRIPE_WEBHOOK_SECRET       # whsec_... signing secret for /api/stripe-webhook
+```
+
+When set:
+- `api/stripe-webhook.ts` records every paid Checkout Session in the
+  `entitlements` table — so a buyer who closes the tab before redirect still
+  gets access.
+- Refunds (`charge.refunded`) flip the row to `refunded`, revoking access.
+- Restore-by-email reads the table (fast, refund-aware, no buyer-count ceiling)
+  instead of scanning Stripe.
+
+Setup:
+1. Run `supabase/migrations/0001_entitlements.sql` against your project
+   (`supabase db push` or the SQL editor).
+2. Add a Stripe webhook endpoint pointing at `https://<app>/api/stripe-webhook`,
+   subscribed to `checkout.session.completed` and `charge.refunded`. Copy its
+   signing secret into `STRIPE_WEBHOOK_SECRET`.
+3. Deploy. Verify locally with
+   `stripe listen --forward-to localhost:3000/api/stripe-webhook`.
 
 ## Starting a new app
 
@@ -107,9 +139,9 @@ Use `trackEvent(name, data)` for app-specific events. The kit doesn't try to be 
 
 The kit will grow when consuming apps reveal real gaps:
 
-- **Server entitlement mode** — for apps that need cross-device unlock or subscriptions (Birthday Sender will force this)
-- **Magic-link auth** — when localStorage isn't enough
-- **Subscription verification** — when one-time-purchase isn't enough
+- ✅ **Server entitlement mode** — durable Supabase-backed entitlement with webhook grant + refund revocation. Opt in via env vars (see above).
+- **Magic-link auth** — for seamless cross-device unlock without re-entering email (today, server-mode cross-device goes through the restore-by-email flow).
+- **Subscription verification** — when one-time-purchase isn't enough (`customer.subscription.*` events + a subscription status column).
 
 Don't add these speculatively. Add them when an app needs them.
 

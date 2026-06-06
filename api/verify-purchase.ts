@@ -12,12 +12,18 @@
 //   STRIPE_PRICE_ID    — Pro tier price ID  (e.g. price_1ABC...)
 //   STRIPE_PRODUCT_ID  — Pro tier product ID (e.g. prod_ABC...)
 //
-// Both PRICE and PRODUCT are checked because Stripe occasionally rotates
-// prices under the same product (e.g. promotional pricing). Either match
-// counts as verified.
+// In server-entitlement mode (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY set),
+// GET also records the verified session in the durable store, and POST reads
+// entitlement straight from that store instead of scanning Stripe. See _lib.ts.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
+import {
+  lineItemMatchesPro,
+  entitlementFromSession,
+  recordEntitlement,
+  emailHasActiveEntitlement,
+} from './_lib';
 
 // ---------------------------------------------------------------------------
 // Rate limiting.
@@ -52,22 +58,6 @@ function isRateLimited(ip: string): boolean {
   return hits.length > RATE_MAX_HITS;
 }
 
-export function lineItemMatchesPro(
-  items: Stripe.ApiList<Stripe.LineItem> | null | undefined,
-  priceId: string,
-  productId: string,
-): boolean {
-  if (!items?.data) return false;
-  return items.data.some((li) => {
-    const liPriceId = li.price?.id;
-    const liProductId =
-      typeof li.price?.product === 'string'
-        ? li.price.product
-        : li.price?.product?.id;
-    return liPriceId === priceId || liProductId === productId;
-  });
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const secret = process.env.STRIPE_SECRET_KEY;
   const priceId = process.env.STRIPE_PRICE_ID;
@@ -94,7 +84,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       const paid = session.payment_status === 'paid';
       const matches = lineItemMatchesPro(session.line_items, priceId, productId);
-      return res.status(200).json({ verified: paid && matches });
+      const verified = paid && matches;
+      // In server mode, persist on confirmation too — this is a safety net in
+      // case the webhook is delayed or wasn't configured. No-op in client mode.
+      if (verified) {
+        const row = entitlementFromSession(session, priceId, productId);
+        if (row) await recordEntitlement(row);
+      }
+      return res.status(200).json({ verified });
     }
 
     if (req.method === 'POST') {
@@ -105,6 +102,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'missing email' });
       }
       const target = email.toLowerCase();
+
+      // Server mode: the durable store is the source of truth. It's fast, has
+      // no buyer-count ceiling, and reflects refunds (refunded rows are not
+      // `active`). Returns null when server mode is off → fall through to
+      // Stripe below.
+      const stored = await emailHasActiveEntitlement(target);
+      if (stored !== null) {
+        return res.status(200).json({ verified: stored });
+      }
 
       // Fast path: if Stripe created a Customer for this email (the common
       // case when checkout collects an email), look it up directly and list
