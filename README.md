@@ -16,7 +16,7 @@ Extracted from [Our Family Lizard](https://ourfamilylizard.com). The patterns ar
 - **`<ProBadge>`** — amber gradient pill for marking Pro features
 - **`<AdminBar>`** — admin top bar with view-as-user toggle (5-tap on logo to enter admin)
 - **`useAuth()`** — entitlement + admin state, URL-based unlock activation, `requirePro(action, source)` wrapper, manual restore-by-email flow
-- **`api/verify-purchase.ts`** — Vercel serverless route that verifies Stripe Checkout sessions and email-based restores
+- **`api/verify-purchase.ts`** — Vercel serverless route that verifies Stripe Checkout sessions and email-based restores. The restore path is IP rate-limited and uses Stripe Customer search (with a recent-session scan as fallback)
 - **Analytics layer** — UTM capture, Stripe `client_reference_id` decoration, named funnel events on Vercel Analytics
 
 ## Per-app contract: `kit.config.ts`
@@ -77,6 +77,17 @@ npm run dev
 ```
 
 The demo renders all four UI primitives, the `requirePro` flow, the admin bar (tap logo 5× within 3s), and the upgrade modal. The Stripe Buy Button won't render with the placeholder `pk_test_DEMO` key — that's expected until you wire up real IDs.
+
+## Tests
+
+```bash
+npm test          # run once
+npm run test:watch
+```
+
+Tests cover the shared money path — the Stripe line-item matcher (`lineItemMatchesPro`) and the URL activation parser (`parseActivation`). These are the pieces that get copied verbatim into every consuming app, so a regression here would propagate silently. Add a case here before changing either.
+
+> **Restore endpoint rate limiting** is best-effort in-memory — it dampens bursts within a warm serverless instance but does not survive cold starts or span concurrent instances. For a high-traffic app, back it with a shared store (Vercel KV / Upstash). See the comment block in `api/verify-purchase.ts`.
 
 ## Funnel events
 

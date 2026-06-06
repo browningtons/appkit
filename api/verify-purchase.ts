@@ -19,7 +19,40 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 
-function lineItemMatchesPro(
+// ---------------------------------------------------------------------------
+// Rate limiting.
+//
+// The POST (email restore) path is the abuse surface: unauthenticated, and
+// each call fans out to several Stripe API requests. Without a limit it's an
+// email-enumeration oracle and a cheap way to burn the account's Stripe rate
+// limit. This is a best-effort in-memory limiter — it dampens bursts within a
+// single warm serverless instance but does NOT survive cold starts or span
+// concurrent instances. For production-grade limiting, back it with a shared
+// store (Vercel KV / Upstash). It is deliberately dependency-free so the
+// starter works on a bare Vercel project.
+// ---------------------------------------------------------------------------
+
+const RATE_WINDOW_MS = 60_000;
+const RATE_MAX_HITS = 8;
+const rateBuckets = new Map<string, number[]>();
+
+function clientIp(req: VercelRequest): string {
+  const fwd = req.headers['x-forwarded-for'];
+  const raw = Array.isArray(fwd) ? fwd[0] : fwd;
+  return raw?.split(',')[0]?.trim() || 'unknown';
+}
+
+/** Returns true if this IP has exceeded the window budget. */
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const cutoff = now - RATE_WINDOW_MS;
+  const hits = (rateBuckets.get(ip) ?? []).filter((t) => t > cutoff);
+  hits.push(now);
+  rateBuckets.set(ip, hits);
+  return hits.length > RATE_MAX_HITS;
+}
+
+export function lineItemMatchesPro(
   items: Stripe.ApiList<Stripe.LineItem> | null | undefined,
   priceId: string,
   productId: string,
@@ -42,6 +75,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!secret || !priceId || !productId) {
     return res.status(500).json({ error: 'server not configured' });
+  }
+
+  if (isRateLimited(clientIp(req))) {
+    return res.status(429).json({ error: 'too many requests' });
   }
 
   const stripe = new Stripe(secret);
@@ -69,9 +106,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const target = email.toLowerCase();
 
-      // Scan recent paid Checkout Sessions. `sessions.list` doesn't support
-      // email filtering, so we page through the most recent results. For
-      // launch volume this is fine — revisit if Pro buyers exceed ~500.
+      // Fast path: if Stripe created a Customer for this email (the common
+      // case when checkout collects an email), look it up directly and list
+      // only that customer's sessions. This is O(buyers-with-this-email)
+      // instead of O(all recent sessions), so it stays correct past the
+      // ~500-buyer ceiling of the scan below. Single quotes are stripped to
+      // keep the search query well-formed.
+      const customers = await stripe.customers.search({
+        query: `email:'${target.replace(/'/g, '')}'`,
+        limit: 10,
+      });
+      for (const cust of customers.data) {
+        const sessions = await stripe.checkout.sessions.list({
+          customer: cust.id,
+          limit: 100,
+          expand: ['data.line_items'],
+        });
+        const hit = sessions.data.find(
+          (s) =>
+            s.payment_status === 'paid' &&
+            lineItemMatchesPro(s.line_items, priceId, productId),
+        );
+        if (hit) return res.status(200).json({ verified: true });
+      }
+
+      // Fallback: scan recent paid Checkout Sessions. `sessions.list` doesn't
+      // support email filtering, so we page through the most recent results.
+      // This catches guest checkouts where no Customer object was created.
+      // For launch volume this is fine — revisit if Pro buyers exceed ~500.
       const MAX_PAGES = 5;
       let startingAfter: string | undefined;
       for (let page = 0; page < MAX_PAGES; page++) {
