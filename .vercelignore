@@ -1,0 +1,3 @@
+# Test files must never be deployed as serverless functions.
+**/*.test.ts
+**/*.test.tsx

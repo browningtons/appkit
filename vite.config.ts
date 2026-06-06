@@ -6,4 +6,7 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   base: '/',
+  // The demo site builds here so it never collides with the published library
+  // in dist/ (the package's `exports` point at dist/).
+  build: { outDir: 'demo-dist' },
 });

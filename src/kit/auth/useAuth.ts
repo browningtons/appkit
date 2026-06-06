@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { load, save } from '../persistence';
 import { useKitConfig } from '../use-kit-config';
 import { trackProPurchase, trackRestoreAttempt } from '../analytics';
+import { parseActivation } from '../activation';
 
 const JUST_PURCHASED_KEY = 'just_purchased';
 
@@ -68,19 +69,17 @@ export function useAuth() {
 
   // One-time URL activation on mount.
   useEffect(() => {
-    const raw = `${window.location.hash}${window.location.search}`;
-    const tokens = raw.replace(/^[#?]/, '').split(/[#?&]/).filter(Boolean);
-    const hasProFlag = tokens.includes('pro=1');
-    const sessionToken = tokens.find((t) => t.startsWith('session_id='));
-    const sessionId = sessionToken?.slice('session_id='.length);
+    const { pro, sessionId, admin } = parseActivation(
+      `${window.location.hash}${window.location.search}`,
+    );
 
-    if (hasProFlag) {
+    if (pro) {
       setIsProReal(true); // eslint-disable-line react-hooks/set-state-in-effect
       save('pro', true);
       markJustPurchased();
       window.history.replaceState(null, '', window.location.pathname);
     }
-    if (sessionId && sessionId.startsWith('cs_')) {
+    if (sessionId) {
       fetch(`/api/verify-purchase?session_id=${encodeURIComponent(sessionId)}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data: { verified?: boolean } | null) => {
@@ -96,7 +95,7 @@ export function useAuth() {
           /* network — swallow; restore flow covers the gap */
         });
     }
-    if (tokens.includes('admin')) {
+    if (admin) {
       setIsAdmin(true);
       save('admin', true);
       window.history.replaceState(null, '', window.location.pathname);
