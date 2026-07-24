@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { lineItemMatchesPro, entitlementFromSession } from './_lib';
+import {
+  lineItemMatchesPro,
+  entitlementFromSession,
+  sessionIsSettled,
+} from './_lib';
 import type Stripe from 'stripe';
 
 const PRICE = 'price_pro';
@@ -53,6 +57,21 @@ describe('lineItemMatchesPro', () => {
   });
 });
 
+describe('sessionIsSettled', () => {
+  it('treats paid sessions as settled', () => {
+    expect(sessionIsSettled('paid')).toBe(true);
+  });
+
+  it('treats zero-total (no_payment_required) sessions as settled', () => {
+    // 100%-off promotion codes complete checkout without a charge.
+    expect(sessionIsSettled('no_payment_required')).toBe(true);
+  });
+
+  it('does not treat unpaid sessions as settled', () => {
+    expect(sessionIsSettled('unpaid')).toBe(false);
+  });
+});
+
 // A paid, Pro-matching session with the given overrides applied.
 function session(overrides: Record<string, unknown> = {}): Stripe.Checkout.Session {
   return {
@@ -83,6 +102,16 @@ describe('entitlementFromSession', () => {
     expect(
       entitlementFromSession(session({ payment_status: 'unpaid' }), PRICE, PRODUCT),
     ).toBeNull();
+  });
+
+  it('maps a zero-total (no_payment_required) Pro session to an active row', () => {
+    const row = entitlementFromSession(
+      session({ payment_status: 'no_payment_required' }),
+      PRICE,
+      PRODUCT,
+    );
+    expect(row?.status).toBe('active');
+    expect(row?.stripe_session_id).toBe('cs_test_1');
   });
 
   it('returns null when there is no email', () => {
