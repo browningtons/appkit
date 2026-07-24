@@ -23,6 +23,7 @@ import {
   entitlementFromSession,
   recordEntitlement,
   emailHasActiveEntitlement,
+  sessionIsSettled,
 } from './_lib';
 
 // ---------------------------------------------------------------------------
@@ -82,7 +83,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const session = await stripe.checkout.sessions.retrieve(sessionId, {
         expand: ['line_items'],
       });
-      const paid = session.payment_status === 'paid';
+      const paid = sessionIsSettled(session.payment_status);
       const matches = lineItemMatchesPro(session.line_items, priceId, productId);
       const verified = paid && matches;
       // In server mode, persist on confirmation too — this is a safety net in
@@ -130,7 +131,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
         const hit = sessions.data.find(
           (s) =>
-            s.payment_status === 'paid' &&
+            sessionIsSettled(s.payment_status) &&
             lineItemMatchesPro(s.line_items, priceId, productId),
         );
         if (hit) return res.status(200).json({ verified: true });
@@ -149,7 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
         const hit = batch.data.find(
           (s) =>
-            s.payment_status === 'paid' &&
+            sessionIsSettled(s.payment_status) &&
             s.customer_details?.email?.toLowerCase() === target,
         );
         if (hit) {

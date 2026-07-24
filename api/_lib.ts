@@ -48,6 +48,14 @@ export function lineItemMatchesPro(
   });
 }
 
+// Stripe uses `no_payment_required` when a completed Checkout Session is
+// reduced to $0 by a promotion. It is settled even though no charge exists.
+export function sessionIsSettled(
+  status: Stripe.Checkout.Session['payment_status'],
+): boolean {
+  return status === 'paid' || status === 'no_payment_required';
+}
+
 // ---------------------------------------------------------------------------
 // Entitlement row mapping (pure — unit tested)
 // ---------------------------------------------------------------------------
@@ -66,15 +74,15 @@ export interface EntitlementRow {
  * Turn a (line-items-expanded) Checkout Session into an active entitlement
  * row, or return null if it shouldn't grant access. Pure: no network, no env.
  *
- * Returns null when the session is not paid, has no email, or its line items
- * don't match the configured Pro price/product.
+ * Returns null when the session is not settled (paid or no_payment_required),
+ * has no email, or its line items don't match the configured Pro price/product.
  */
 export function entitlementFromSession(
   session: Stripe.Checkout.Session,
   priceId: string,
   productId: string,
 ): EntitlementRow | null {
-  if (session.payment_status !== 'paid') return null;
+  if (!sessionIsSettled(session.payment_status)) return null;
 
   const email = session.customer_details?.email?.trim().toLowerCase();
   if (!email) return null;
