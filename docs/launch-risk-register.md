@@ -10,22 +10,6 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
 
 ## Active
 
-### R1 — Promo / $0 checkout does not unlock Pro — **High**
-- **Where:** `api/_lib.ts` `entitlementFromSession` (`payment_status !== 'paid'`
-  → null) and `api/verify-purchase.ts` GET (`paid = session.payment_status === 'paid'`).
-- **Failure:** Stripe returns `payment_status: 'no_payment_required'` (not `'paid'`)
-  for a checkout whose total is $0 — e.g. a 100%-off coupon or a free/intro price.
-  Both the GET confirmation and the webhook's `entitlementFromSession` mapping
-  reject such a session, so a legitimate promo buyer completes checkout and gets
-  **no Pro access**. Confirmed by grep: `no_payment_required` is handled nowhere.
-- **Fix (proposed):** treat `payment_status in ('paid','no_payment_required')` as
-  entitled in both the pure mapper and the GET path. Guard with a unit test in
-  `api/_lib.test.ts` (add a `no_payment_required` session fixture). Consider an
-  explicit config flag if a repo wants to *reject* $0 unlocks.
-- **Blast radius:** every adopter repo (`our-family-lizard`, `debt-snowball-dolphin`)
-  copied this literal. File Meseeks follow-ups when fixing here.
-- **Proof available today:** yes — pure unit test, no live money.
-
 ### R2 — Client-mode restore is not refund-aware — **Medium**
 - **Where:** `api/verify-purchase.ts` POST, Stripe-scan branches (lines ~121–166).
 - **Failure:** In client mode (no Supabase), restore-by-email matches any session
@@ -75,4 +59,30 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
 
 ## Closed
 
-_(none yet — first visit)_
+### R1 — Promo / $0 checkout does not unlock Pro — **High** — CLOSED 2026-07-24
+- **Was:** Stripe returns `payment_status: 'no_payment_required'` (not `'paid'`)
+  for a $0 total — a 100%-off coupon or a free/intro price. Four gates rejected
+  such a session, so a legitimate promo buyer completed checkout and got **no
+  Pro access**: `api/_lib.ts` `entitlementFromSession` (shared by the GET
+  verification path *and* the `checkout.session.completed` webhook), plus
+  `api/verify-purchase.ts` at the GET confirmation and both POST restore
+  branches (customer-search and recent-session scan).
+- **Fixed by:** [appkit#4](https://github.com/browningtons/appkit/pull/4),
+  merged 2026-07-24. Adds a shared exported `sessionIsSettled(status)` helper
+  (`'paid' || 'no_payment_required'`) in `api/_lib.ts` and substitutes it at all
+  four gates. Ports the pattern proven in
+  [our-family-lizard#25](https://github.com/browningtons/our-family-lizard/pull/25).
+- **Refund revocation deliberately untouched:** `charge.refunded` →
+  `revokeByPaymentIntent` still runs, matching the reference fix. A settled $0
+  session is entitled; a refunded one is still revoked.
+- **Test:** `api/_lib.test.ts` — `treats zero-total (no_payment_required)
+  sessions as settled` (helper unit) and `maps a zero-total
+  (no_payment_required) Pro session to an active row` (mapper integration).
+  Suite green: 48/48 across 4 files, `tsc -b` clean.
+- **Blast radius — all adopters now clear:** `our-family-lizard` fixed
+  2026-07-15 (#25); `debt-snowball-ant` (local folder `debt-snowball-dolphin`)
+  audited 2026-07-24 and found already clean — it defines the same
+  `sessionIsSettled` helper in both `api/verify-purchase.ts` and
+  `api/stripe-webhook.ts`, with zero bare `payment_status === 'paid'` gates
+  remaining. appkit was the last carrier, and as the pack's paywall starter it
+  would have shipped the bug to every future adopter.
