@@ -113,10 +113,55 @@ export function entitlementFromSession(
 // Supabase (server entitlement store)
 // ---------------------------------------------------------------------------
 
-/** True when the app is configured for durable server-side entitlement. */
+/**
+ * True when the app is configured for durable server-side entitlement.
+ *
+ * All THREE vars are required, and the third one is not decoration.
+ *
+ * Server mode is a claim that the `entitlements` table is the source of truth.
+ * Only the Stripe webhook ever writes that table, and the webhook cannot verify
+ * a signature without STRIPE_WEBHOOK_SECRET — so without it the table stays
+ * permanently empty while this function still says "trust the table".
+ *
+ * What that cost, before this check required the secret (R6/A6):
+ *
+ *   1. serverModeEnabled() → true, so emailHasActiveEntitlement() returns a
+ *      real boolean instead of null.
+ *   2. verify-purchase returns on that boolean and never reaches its Stripe
+ *      fallback — the fallback that would have found the real purchase.
+ *   3. The table is empty, so the boolean is always false.
+ *
+ * Net effect: a customer who genuinely paid is told "no purchase found", and
+ * the Stripe scan that would have rescued them is skipped *because* server mode
+ * is on. Two of three vars is strictly worse than zero of three, and it fails
+ * silently end to end — no exception, no retry, no log, no Stripe-side error.
+ *
+ * With the secret required, a partial config now means server mode is OFF,
+ * `emailHasActiveEntitlement` returns null, and verify-purchase falls through
+ * to Stripe. The customer is served. See stripe-webhook.ts for the second half
+ * of this fix: the webhook now refuses to fail quietly in the same situation.
+ */
 export function serverModeEnabled(): boolean {
   return Boolean(
-    process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY,
+    process.env.SUPABASE_URL &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY &&
+      process.env.STRIPE_WEBHOOK_SECRET,
+  );
+}
+
+/**
+ * True when the Supabase half of server mode is configured — regardless of
+ * whether the webhook secret is.
+ *
+ * Only the webhook uses this, to tell two situations apart that
+ * `!serverModeEnabled()` alone cannot distinguish:
+ *   - a client-mode app that merely has this route deployed → ack and ignore
+ *   - a half-configured server-mode app → a real misconfiguration, fail loudly
+ */
+export function serverModePartiallyConfigured(): boolean {
+  return (
+    Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) &&
+    !process.env.STRIPE_WEBHOOK_SECRET
   );
 }
 

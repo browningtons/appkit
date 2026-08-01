@@ -1,8 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   lineItemMatchesPro,
   entitlementFromSession,
   sessionIsSettled,
+  serverModeEnabled,
+  serverModePartiallyConfigured,
 } from './_lib';
 import type Stripe from 'stripe';
 
@@ -145,5 +147,154 @@ describe('entitlementFromSession', () => {
     );
     expect(row?.stripe_customer_id).toBeNull();
     expect(row?.stripe_payment_intent_id).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Server-mode configuration gate (R6/A6)
+// ---------------------------------------------------------------------------
+//
+// The bug these lock down: ADOPTING.md promises three env vars turn on server
+// mode; serverModeEnabled() checked two. Setting SUPABASE_URL +
+// SUPABASE_SERVICE_ROLE_KEY and forgetting STRIPE_WEBHOOK_SECRET produced a
+// silent, end-to-end failure in which real paying customers were told "no
+// purchase found" — because server mode was on, verify-purchase trusted an
+// entitlements table that the webhook could never write.
+//
+// Two of three was strictly worse than zero of three. These tests exist so it
+// cannot quietly become two of three again.
+
+describe('serverModeEnabled — all three vars, or none of it counts', () => {
+  const KEYS = [
+    'SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'STRIPE_WEBHOOK_SECRET',
+  ] as const;
+  let saved: Record<string, string | undefined>;
+
+  beforeEach(() => {
+    saved = {};
+    for (const k of KEYS) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+  });
+  afterEach(() => {
+    for (const k of KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  const set = (...keys: string[]) => {
+    for (const k of keys) process.env[k] = `test-${k}`;
+  };
+
+  it('is off when nothing is configured', () => {
+    expect(serverModeEnabled()).toBe(false);
+  });
+
+  it('is ON only when all three are set', () => {
+    set('SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'STRIPE_WEBHOOK_SECRET');
+    expect(serverModeEnabled()).toBe(true);
+  });
+
+  it('is OFF with the two Supabase vars but no webhook secret — the whole bug', () => {
+    // This exact combination used to return true, which is what routed a real
+    // customer into an empty table and past the Stripe fallback that would
+    // have found their purchase.
+    set('SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY');
+    expect(serverModeEnabled()).toBe(false);
+  });
+
+  it('is off for every other partial combination', () => {
+    const partials = [
+      ['SUPABASE_URL'],
+      ['SUPABASE_SERVICE_ROLE_KEY'],
+      ['STRIPE_WEBHOOK_SECRET'],
+      ['SUPABASE_URL', 'STRIPE_WEBHOOK_SECRET'],
+      ['SUPABASE_SERVICE_ROLE_KEY', 'STRIPE_WEBHOOK_SECRET'],
+    ];
+    for (const combo of partials) {
+      for (const k of KEYS) delete process.env[k];
+      set(...combo);
+      expect(serverModeEnabled(), `partial: ${combo.join('+')}`).toBe(false);
+    }
+  });
+
+  it('falling back to client mode is what rescues the customer', () => {
+    // The point of returning false here is not tidiness. emailHasActiveEntitlement
+    // returns null when server mode is off, and that null is what lets
+    // verify-purchase fall through to its Stripe lookup instead of answering
+    // from an empty table.
+    set('SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY');
+    expect(serverModeEnabled()).toBe(false);
+  });
+});
+
+describe('serverModePartiallyConfigured — tells misconfiguration from client mode', () => {
+  const KEYS = [
+    'SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'STRIPE_WEBHOOK_SECRET',
+  ] as const;
+  let saved: Record<string, string | undefined>;
+
+  beforeEach(() => {
+    saved = {};
+    for (const k of KEYS) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+  });
+  afterEach(() => {
+    for (const k of KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  it('is TRUE for the dangerous half-configured case', () => {
+    process.env.SUPABASE_URL = 'x';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'y';
+    expect(serverModePartiallyConfigured()).toBe(true);
+  });
+
+  it('is FALSE for a plain client-mode app, so the webhook still acks quietly', () => {
+    // A client-mode app that merely has this route deployed must keep getting
+    // a quiet 200 — failing loudly there would be noise, not signal.
+    expect(serverModePartiallyConfigured()).toBe(false);
+  });
+
+  it('is FALSE once fully configured', () => {
+    process.env.SUPABASE_URL = 'x';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'y';
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_z';
+    expect(serverModePartiallyConfigured()).toBe(false);
+  });
+
+  it('is FALSE when only the webhook secret is set (never intended server mode)', () => {
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_z';
+    expect(serverModePartiallyConfigured()).toBe(false);
+  });
+
+  it('never overlaps with serverModeEnabled', () => {
+    // The two must be mutually exclusive: a config cannot be both "good to go"
+    // and "half-configured". The webhook relies on that to pick a branch.
+    const combos = [
+      [], ['SUPABASE_URL'], ['SUPABASE_SERVICE_ROLE_KEY'], ['STRIPE_WEBHOOK_SECRET'],
+      ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'],
+      ['SUPABASE_URL', 'STRIPE_WEBHOOK_SECRET'],
+      ['SUPABASE_SERVICE_ROLE_KEY', 'STRIPE_WEBHOOK_SECRET'],
+      ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'STRIPE_WEBHOOK_SECRET'],
+    ];
+    for (const combo of combos) {
+      for (const k of KEYS) delete process.env[k];
+      for (const k of combo) process.env[k] = 'v';
+      expect(
+        serverModeEnabled() && serverModePartiallyConfigured(),
+        `combo: ${combo.join('+') || '(none)'}`,
+      ).toBe(false);
+    }
   });
 });

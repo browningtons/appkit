@@ -87,15 +87,30 @@ SUPABASE_SERVICE_ROLE_KEY
 STRIPE_WEBHOOK_SECRET
 ```
 
-> **Set all three or none — two of the three is worse than zero.**
-> `serverModeEnabled()` checks only `SUPABASE_URL` and
-> `SUPABASE_SERVICE_ROLE_KEY`. Set those two and forget the webhook secret and
-> the app reports server mode ON, so restore-by-email stops falling back to
-> Stripe — while the webhook, missing its secret, acks 200 and writes nothing,
-> leaving the `entitlements` table permanently empty. Real buyers are then told
-> "no purchase found," with no error, no failed-webhook alert, and no retry.
-> After configuring, buy one Pro seat and restore it by email before trusting
-> it. See `.env.example` and R6 in the risk register.
+> **All three, or none.** Server mode only switches on when every one of them is
+> set — `serverModeEnabled()` requires all three, deliberately.
+>
+> The reason is worth knowing before you go hunting for why it "isn't turning
+> on". Only the Stripe webhook writes the `entitlements` table, and it cannot
+> verify a signature without `STRIPE_WEBHOOK_SECRET`. So a two-of-three config
+> would leave that table permanently empty while the app still treated it as the
+> source of truth — and `verify-purchase` would answer from the empty table
+> instead of falling back to Stripe. **A customer who really paid gets told "no
+> purchase found"** — with no error, no failed-webhook alert, and no retry.
+>
+> This is not hypothetical. Until 2026-08-01 `serverModeEnabled()` checked only
+> the two Supabase vars, and the two-of-three config did exactly that, silently.
+> It is **R6** in the risk register, and it is why this section exists.
+>
+> Two things now prevent it. A partial config runs in client mode, so the Stripe
+> fallback stays live and the customer is served. And if you set the two Supabase
+> vars but omit the secret, `/api/stripe-webhook` returns **500** with an
+> explanatory log rather than a quiet `200` — so Stripe surfaces a failed
+> delivery instead of recording a success that never happened.
+>
+> Still worth verifying by hand: after configuring, **buy one Pro seat and
+> restore it by email before trusting it.** See [`.env.example`](.env.example)
+> and R6 in the risk register.
 
 **No browser env vars.** This kit reads no `VITE_`-prefixed variable anywhere.
 Client-side values live in `kit.config.ts`, which ships in the bundle. Anything
