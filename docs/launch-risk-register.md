@@ -46,18 +46,82 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
   upgrade in `ADOPTING.md`. Low until real volume.
 - **Proof available today:** N/A (infra change).
 
-### R5 — No `.env.example`; key hygiene lives only in code comments — **Low**
-- **Where:** repo root (no `.env.example`); env vars documented inline in
-  `api/verify-purchase.ts` / `api/stripe-webhook.ts` / `api/_lib.ts` headers.
-- **Failure:** Adopters have no single canonical env manifest, and there's no
-  written guardrail against pointing a `sk_test_...` key at a production deploy (or
-  vice-versa). This is a Trust-Ledger-adjacent gap surfaced here for coordination.
-- **Fix (proposed):** add `.env.example` listing all money-path vars with
-  test/live-key hygiene notes; cross-link from `ADOPTING.md`. (Consider handing to
-  the Trust Ledger wolf.)
-- **Proof available today:** yes — doc-only.
+### R6 — Two of the three server-mode vars silently breaks restore for real buyers — **High** · `[→ revenue-rail]`
+- **Where:** `api/_lib.ts:117` (`serverModeEnabled`), `api/stripe-webhook.ts:62`
+  (the ack-and-ignore guard), `api/verify-purchase.ts:111` (restore's early
+  return).
+- **Found:** 2026-07-31 by Trust Ledger, while writing the `.env.example` that
+  closes R5. The manifest is what made the asymmetry visible: the docs say
+  three variables turn server mode on; the code gates on two.
+- **Failure:** set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` and forget
+  `STRIPE_WEBHOOK_SECRET`, and every part behaves "correctly" into a hole:
+  1. `serverModeEnabled()` → `true` (it never checks the webhook secret), so
+     `emailHasActiveEntitlement()` returns a real boolean instead of `null`,
+     and restore-by-email **returns at `verify-purchase.ts:113` without ever
+     reaching the Stripe fallback below it.**
+  2. The webhook, missing its secret, hits the `!webhookSecret` guard and
+     returns `200 {received: true, handled: false}` — so the `entitlements`
+     table is never written, and **Stripe records a successful delivery**, so
+     no failed-webhook alert ever fires.
+  3. The table stays permanently empty, so the boolean from step 1 is always
+     `false`: a customer who really paid is told "no purchase found," and the
+     Stripe scan that would have found their session is skipped *because*
+     server mode is on.
+
+  Two of three is strictly worse than zero of three, and it is silent end to
+  end — no exception, no retry, no log line, no Stripe-side error. The `200`
+  in step 2 is deliberate (it makes adding the route to a client-mode app
+  harmless) and correct in isolation; it only becomes a trap in combination
+  with a `serverModeEnabled()` that disagrees with it about what "server mode"
+  means.
+- **Fix (proposed):** make the two agree. Either `serverModeEnabled()` also
+  requires `STRIPE_WEBHOOK_SECRET`, or the webhook throws loudly when the
+  Supabase vars are set and its secret is not. Belongs to Revenue Rail —
+  entitlement code is its lane; Trust Ledger has documented the trap in
+  `.env.example` and `ADOPTING.md` in the meantime so the copy is honest
+  either way.
+- **Proof available today:** yes — no deploy needed. `serverModeEnabled()`
+  reads two vars, the webhook guard reads four, and
+  `emailHasActiveEntitlement()` returns `null` only when `getSupabase()` is
+  null or the query errors.
+
+### R7 — The kit ships a refund promise that reads like finished copy — **Low**
+- **Where:** `kit.config.example.ts` → `upgrade.trustLine`: *"Secure payment via
+  Stripe. 30-day refund, no questions asked. No account. No recurring
+  charges."*
+- **Failure:** every other placeholder in that file announces itself —
+  `pk_live_REPLACE_ME`, `price_REPLACE_ME`, `'Feature one'`, `'Your App'`. The
+  trust line is the one field that reads as production-ready, so it is the one
+  most likely to ship unedited — and it is a **binding public promise about
+  refunds**, made on behalf of an adopter who never chose it. It also sits
+  slightly ahead of what the kit does: R2 (client-mode restore is not
+  refund-aware) and R3 (a partial refund revokes full access) are both open.
+- **Fix (proposed):** make it obviously a placeholder, consistent with its
+  neighbours — e.g. `'REPLACE_ME: your refund and billing promise'` — so an
+  adopter has to make the claim deliberately.
+- **Proof available today:** yes — read the file; compare against the
+  `REPLACE_ME` convention two fields above.
 
 ## Closed
+
+### R5 — No `.env.example`; key hygiene lived only in code comments — **Low** — CLOSED 2026-07-31
+- **Was:** no canonical env manifest, and no written guardrail against pointing
+  a `sk_test_...` key at a production deploy. Seeded by Revenue Rail and
+  explicitly offered to Trust Ledger (env docs / key hygiene is its lane);
+  claimed and closed on this visit.
+- **Fixed:** added `.env.example` covering all six variables the API routes
+  read, with a required/optional split, the R6 trap called out in a box, the
+  service-role-key warning, and a test-vs-live "keep whole sets together" rule.
+  Cross-linked from `ADOPTING.md` §4, which also gained the no-`VITE_` note.
+- **Verified:** the manifest and the code agree exactly in both directions —
+  the six names in `.env.example` are precisely the six `process.env` reads in
+  `api/`, with nothing documented that isn't read and nothing read that isn't
+  documented. `.env.example` is not gitignored (`.gitignore` covers `.env` and
+  `.env.local` only), so adopters actually receive it.
+- **Re-run the check:** compare `grep -rhon "process\.env\.[A-Z_0-9]*" api src
+  scripts | sed 's/.*process\.env\.//' | sort -u` against
+  `grep -oE "^[A-Z_0-9]+=" .env.example | tr -d '=' | sort -u`. A new variable
+  with no manifest line reopens R5.
 
 ### R1 — Promo / $0 checkout does not unlock Pro — **High** — CLOSED 2026-07-24
 - **Was:** Stripe returns `payment_status: 'no_payment_required'` (not `'paid'`)

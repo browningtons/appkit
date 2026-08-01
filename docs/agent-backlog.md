@@ -31,10 +31,25 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   before granting in client mode, or explicitly document in `ADOPTING.md` that
   refund revocation requires server mode. Prefer the doc + a smaller code guard.
 
-### A4 — Add `.env.example` + test/live key-hygiene note — **score 8**
-- Impact 3, Confidence 5, Risk Reduction 2, Effort −2.
-- Closes **R5 (Low)**. Single canonical env manifest for all money-path vars.
-  May be handed to the Trust Ledger wolf (its lane: env docs / key hygiene).
+### A6 — Make `serverModeEnabled()` and the webhook agree — **score 13** · `[→ revenue-rail]`
+- Impact 5, Confidence 5, Risk Reduction 5, Effort −2.
+- Closes **R6 (High)**, found 2026-07-31 while writing the A4 manifest. Setting
+  `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` without `STRIPE_WEBHOOK_SECRET`
+  turns server mode on, stops restore falling back to Stripe, and leaves the
+  `entitlements` table permanently empty — so paying customers are told "no
+  purchase found," silently, with Stripe reporting successful webhook delivery.
+- Either make `serverModeEnabled()` require the webhook secret too, or make the
+  webhook fail loudly when the Supabase vars are set and its secret is not.
+  **This is the top item in the repo** — it loses real buyers their access.
+- Entitlement code is Revenue Rail's lane; Trust Ledger has documented the trap
+  in `.env.example` and `ADOPTING.md` so the copy is honest until the code is.
+
+### A7 — Make the shipped `trustLine` an obvious placeholder — **score 6**
+- Impact 2, Confidence 5, Risk Reduction 1, Effort −2.
+- Closes **R7 (Low)**. `kit.config.example.ts` ships *"30-day refund, no
+  questions asked"* as finished-looking copy while every neighbouring field
+  shouts `REPLACE_ME`. It is a binding refund promise made on an adopter's
+  behalf, and it runs slightly ahead of what the kit does (R2/R3 open).
 
 ### A5 — Add an `npm run verify` alias + dependency-audit CI step — **score 7**
 - Impact 3, Confidence 4, Risk Reduction 2, Effort −2.
@@ -44,7 +59,27 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
 
 ## Completed
 
-_(none yet — first visit)_
+### A4 — Add `.env.example` + test/live key-hygiene note — 2026-07-31
+*(Trust Ledger; closes R5, and turned up R6/A7 on the way)*
+
+Revenue Rail seeded this and offered it to Trust Ledger explicitly — env docs
+and key hygiene are its lane. Claimed and shipped.
+
+`.env.example` now covers all six variables the API routes read, split into
+required (client mode) and optional (server mode), with the R6 trap boxed at
+the top of the server-mode block, the service-role-key warning, and a
+test-vs-live "keep whole sets together" rule. `ADOPTING.md` §4 links to it and
+gained a note that the kit reads **no** `VITE_` variable — client values live
+in `kit.config.ts`, which is public by design.
+
+**Verified both directions:** the six names in the manifest are exactly the six
+`process.env` reads under `api/` — nothing documented that isn't read, nothing
+read that isn't documented — and `.env.example` is not gitignored, so adopters
+receive it. Re-run that comparison when adding a variable; a mismatch reopens
+R5.
+
+Writing the manifest is what exposed R6: documenting "these three turn on
+server mode" forced a read of `serverModeEnabled()`, which checks two.
 
 ## Radical bets
 
