@@ -31,6 +31,7 @@ import {
   recordEntitlement,
   revokeByPaymentIntent,
   serverModeEnabled,
+  serverModePartiallyConfigured,
 } from './_lib';
 
 // Stripe signature verification needs the exact raw request bytes, so opt out
@@ -57,8 +58,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const productId = process.env.STRIPE_PRODUCT_ID;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-  // If server mode or the webhook secret isn't configured, ack and ignore so
-  // adding this route to a client-mode app is harmless.
+  // Half-configured server mode is the dangerous case, so it gets checked
+  // first and it is NOT allowed to ack quietly.
+  //
+  // Supabase vars set + no webhook secret means someone intended server mode
+  // and got two of the three vars. Acking 200 here would make Stripe record a
+  // SUCCESSFUL delivery, so no failed-webhook alert ever fires, while the
+  // entitlements table stays empty forever and real customers are told "no
+  // purchase found" (see serverModeEnabled in _lib.ts for the full chain).
+  //
+  // 500 is deliberate: Stripe retries it and surfaces it as a failed delivery
+  // in the dashboard. A retry storm is a nuisance; silently denying paying
+  // customers is not. Loud beats quiet when the quiet version is invisible.
+  if (serverModePartiallyConfigured()) {
+    console.error(
+      'stripe-webhook: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set but ' +
+        'STRIPE_WEBHOOK_SECRET is missing. Server mode is half-configured: the ' +
+        'entitlements table can never be written, so paying customers will be ' +
+        'told "no purchase found". Set STRIPE_WEBHOOK_SECRET, or unset the ' +
+        'Supabase vars to run in client mode.',
+    );
+    return res.status(500).json({
+      error: 'server mode half-configured: STRIPE_WEBHOOK_SECRET is missing',
+    });
+  }
+
+  // Genuinely not configured for server mode — ack and ignore, so adding this
+  // route to a client-mode app stays harmless.
   if (!secret || !priceId || !productId || !webhookSecret || !serverModeEnabled()) {
     return res.status(200).json({ received: true, handled: false });
   }
