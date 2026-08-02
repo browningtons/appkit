@@ -66,6 +66,10 @@ Stripe signature verification works.
 
 ## 4. Environment variables (Vercel)
 
+[`.env.example`](.env.example) is the canonical manifest — it lists every
+variable the API routes read, with test/live key hygiene notes. Copy it to
+`.env` for local dev and mirror the names into your host's env UI.
+
 Always required:
 
 ```
@@ -82,6 +86,21 @@ SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
 STRIPE_WEBHOOK_SECRET
 ```
+
+> **Set all three or none — two of the three is worse than zero.**
+> `serverModeEnabled()` checks only `SUPABASE_URL` and
+> `SUPABASE_SERVICE_ROLE_KEY`. Set those two and forget the webhook secret and
+> the app reports server mode ON, so restore-by-email stops falling back to
+> Stripe — while the webhook, missing its secret, acks 200 and writes nothing,
+> leaving the `entitlements` table permanently empty. Real buyers are then told
+> "no purchase found," with no error, no failed-webhook alert, and no retry.
+> After configuring, buy one Pro seat and restore it by email before trusting
+> it. See `.env.example` and R6 in the risk register.
+
+**No browser env vars.** This kit reads no `VITE_`-prefixed variable anywhere.
+Client-side values live in `kit.config.ts`, which ships in the bundle. Anything
+you prefix with `VITE_` is served to every visitor — no secret above may ever
+wear that prefix.
 
 ## 5. Server-mode setup (if used)
 
