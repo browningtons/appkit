@@ -147,3 +147,27 @@ wear that prefix.
   defeats versioned upgrades.
 - When appkit ships a security fix, bump every app's pinned tag. Track which
   app is on which version (the launch-checklist review verifies this).
+
+## Carry the audit gate
+
+appkit's production dependencies become *your* production dependencies. Copy
+both halves of the gate, not just the first:
+
+```jsonc
+// package.json
+"audit:deps": "npm audit --omit=dev --audit-level=low",
+"verify": "npm run lint && npm test && npm run build && npm run audit:deps"
+```
+
+1. **On push / PR** — call `npm run audit:deps` from your CI workflow.
+2. **On a clock** — copy `.github/workflows/dependency-audit.yml`. This is the
+   half that is easy to skip and the one that matters: a push-triggered audit
+   can only catch an advisory that is already published at the moment someone
+   happens to push, so a repo nobody touched this month is not audited, it is
+   just quiet. A finished app is exactly the app that stops getting pushes.
+
+Both call the same `audit:deps` script deliberately — one definition, so the
+scheduled gate and the push gate cannot drift apart. `--omit=dev` keeps the gate
+about what ships to users; `--audit-level=low` is the strictest setting that is
+green today, and the pack has been bitten by *moderate* advisories three times
+(dompurify), so do not loosen it without a reason written down.
