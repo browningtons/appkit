@@ -104,6 +104,46 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
 
 ## Closed
 
+### R8 — The kit never re-verifies Pro, so a refund never revokes on-device — **High** — CLOSED 2026-08-12
+- **Was:** `src/kit/auth/useAuth.ts` had no boot re-verify effect at all. Once
+  Pro was written to `localStorage` (checkout redirect, `#pro=1`, or
+  restore-by-email) it was permanent on that device by every route — the hook
+  read `load('pro', false)` on mount and never asked the backend again. So even
+  when a refund correctly flipped the server `entitlements` row to `refunded`
+  (server mode) or would have, the device that had already unlocked kept Pro
+  forever. The public claim in `README.md` (server mode "revoking access") and
+  `ADOPTING.md` was only half-true: the row was revoked, the device was not.
+  Because appkit is the reference kit, every future adopter shipped this — and
+  it is the **root** of the independently hand-built re-verifiers in
+  `our-family-lizard` (R15) and `debt-snowball-ant`.
+- **Distinct from R2:** R2 is the *endpoint's* client-mode Stripe scan ignoring
+  refund state (it answers `verified:true` for a refunded buyer). R8 is the
+  *client* never asking again. They compose: in **server mode** the endpoint is
+  refund-aware, so R8's re-verify now revokes end-to-end; in **client mode** the
+  device now re-asks, but the honest answer still waits on R2. R8 is the
+  plumbing; R2 is one source's truthfulness.
+- **Fixed by:** porting the proven pattern from
+  [our-family-lizard#44](https://github.com/browningtons/our-family-lizard/pull/44).
+  New `src/kit/auth/proReverify.ts` holds the pure policy: a 24h throttle
+  (`pro_last_verified_at`), a handle-preference plan (`cs_...` session id else
+  restore email), and an affirmative-only response mapper. `useAuth` gained a
+  mount-only boot re-verify effect that re-checks `/api/verify-purchase` (GET by
+  session id, POST by stored email), **revokes only on a 2xx `{verified:false}`**,
+  and **fails OPEN** on 429/5xx/network so a flaky backend never strips a paying
+  buyer. Restore now stores the email handle and both unlock paths seed the
+  throttle clock. The handle-less `#pro=1` instant unlock has nothing to
+  re-check and stays unlocked by design — documented, not silent.
+- **Verified:** `npm run lint && npm test && npm run build` green;
+  `proReverify.test.ts` adds 20 pure-policy tests (throttle boundary,
+  handle preference, affirmative-only revoke, fail-open on null/missing).
+  Suite 56/56 across 3 files.
+- **Build hygiene fixed en route:** `npm ci` was broken on `main` — the hoisted
+  `@emnapi/wasi-threads` node was pinned to `1.2.2` while `@tailwindcss/oxide-wasm32-wasi@4.2.4`
+  bundles `1.2.3`, so the lockfile was inconsistent with itself. Surgically
+  bumped that one node (authoritative registry integrity, no whole-lock regen).
+  CI uses `npm install`, which masked it — see backlog **A5** (switch CI to
+  `npm ci` + add the `verify` alias) for the durable guard.
+
 ### R5 — No `.env.example`; key hygiene lived only in code comments — **Low** — CLOSED 2026-07-31
 - **Was:** no canonical env manifest, and no written guardrail against pointing
   a `sk_test_...` key at a production deploy. Seeded by Revenue Rail and

@@ -59,6 +59,31 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
 
 ## Completed
 
+### A8 — Boot re-verify so a refund revokes on-device — 2026-08-12
+*(closes R8 (High); ports our-family-lizard#44)*
+
+`src/kit/auth/useAuth.ts` had no boot re-verify at all — cached Pro was
+permanent on the device by every route, so a refund never revoked it there.
+This was the root of the re-verifiers `our-family-lizard` (R15) and
+`debt-snowball-ant` each hand-built independently, and as the reference kit it
+shipped the gap to every future adopter.
+
+Added `src/kit/auth/proReverify.ts` (pure policy: 24h throttle, session-id ▸
+restore-email handle preference, affirmative-only response mapper) +
+`proReverify.test.ts` (20 tests). `useAuth` now runs a mount-only, throttled
+boot re-verify against `/api/verify-purchase` (GET by session id, POST by stored
+email); it **revokes only on a 2xx `{verified:false}`** and **fails OPEN** on
+429/5xx/network so a flaky backend never strips a paying buyer. Restore stores
+the email handle; both unlock paths seed `pro_last_verified_at`. The handle-less
+`#pro=1` path stays unlocked by design (documented).
+
+**Verified:** `npm run lint && npm test && npm run build` green; 56/56 tests
+across 3 files. Fixed a broken `npm ci` en route (hoisted `@emnapi/wasi-threads`
+`1.2.2` → `1.2.3` to match `oxide-wasm32-wasi@4.2.4`'s bundle; surgical, no
+whole-lock regen). **Blast-radius follow-up:** file Meseeks checks that
+`our-family-lizard` and `debt-snowball-ant` match this kit shape (they should —
+this was ported *from* their fixes).
+
 ### A4 — Add `.env.example` + test/live key-hygiene note — 2026-07-31
 *(Trust Ledger; closes R5, and turned up R6/A7 on the way)*
 

@@ -15,7 +15,7 @@ Extracted from [Our Family Lizard](https://ourfamilylizard.com). The patterns ar
 - **`<LockedOverlay>`** — translucent overlay for gating cards/sections in place
 - **`<ProBadge>`** — amber gradient pill for marking Pro features
 - **`<AdminBar>`** — admin top bar with view-as-user toggle (5-tap on logo to enter admin)
-- **`useAuth()`** — entitlement + admin state, URL-based unlock activation, `requirePro(action, source)` wrapper, manual restore-by-email flow
+- **`useAuth()`** — entitlement + admin state, URL-based unlock activation, `requirePro(action, source)` wrapper, manual restore-by-email flow, and a throttled boot re-verify that revokes Pro on refund (fails open on network/rate-limit errors)
 - **`api/verify-purchase.ts`** — Vercel serverless route that verifies Stripe Checkout sessions and email-based restores. The restore path is IP rate-limited and uses Stripe Customer search (with a recent-session scan as fallback)
 - **`api/stripe-webhook.ts`** — optional Stripe webhook for durable server-side entitlement (grant on `checkout.session.completed`, revoke on `charge.refunded`). No-op until you set the Supabase env vars — see below
 - **Analytics layer** — UTM capture, Stripe `client_reference_id` decoration, named funnel events on Vercel Analytics
@@ -62,7 +62,11 @@ When set:
 - `api/stripe-webhook.ts` records every paid Checkout Session in the
   `entitlements` table — so a buyer who closes the tab before redirect still
   gets access.
-- Refunds (`charge.refunded`) flip the row to `refunded`, revoking access.
+- Refunds (`charge.refunded`) flip the row to `refunded`, revoking access. A
+  device that already unlocked Pro picks this up on its next open: `useAuth`
+  runs a throttled (24h) boot re-verify against `/api/verify-purchase` and
+  revokes locally on an affirmative not-entitled answer — failing open on a
+  rate-limit or network error so a paying buyer is never wrongly locked out.
 - Restore-by-email reads the table (fast, refund-aware, no buyer-count ceiling)
   instead of scanning Stripe.
 
