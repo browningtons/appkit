@@ -46,45 +46,6 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
   upgrade in `ADOPTING.md`. Low until real volume.
 - **Proof available today:** N/A (infra change).
 
-### R6 — Two of the three server-mode vars silently breaks restore for real buyers — **High** · `[→ revenue-rail]`
-- **Where:** `api/_lib.ts:117` (`serverModeEnabled`), `api/stripe-webhook.ts:62`
-  (the ack-and-ignore guard), `api/verify-purchase.ts:111` (restore's early
-  return).
-- **Found:** 2026-07-31 by Trust Ledger, while writing the `.env.example` that
-  closes R5. The manifest is what made the asymmetry visible: the docs say
-  three variables turn server mode on; the code gates on two.
-- **Failure:** set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` and forget
-  `STRIPE_WEBHOOK_SECRET`, and every part behaves "correctly" into a hole:
-  1. `serverModeEnabled()` → `true` (it never checks the webhook secret), so
-     `emailHasActiveEntitlement()` returns a real boolean instead of `null`,
-     and restore-by-email **returns at `verify-purchase.ts:113` without ever
-     reaching the Stripe fallback below it.**
-  2. The webhook, missing its secret, hits the `!webhookSecret` guard and
-     returns `200 {received: true, handled: false}` — so the `entitlements`
-     table is never written, and **Stripe records a successful delivery**, so
-     no failed-webhook alert ever fires.
-  3. The table stays permanently empty, so the boolean from step 1 is always
-     `false`: a customer who really paid is told "no purchase found," and the
-     Stripe scan that would have found their session is skipped *because*
-     server mode is on.
-
-  Two of three is strictly worse than zero of three, and it is silent end to
-  end — no exception, no retry, no log line, no Stripe-side error. The `200`
-  in step 2 is deliberate (it makes adding the route to a client-mode app
-  harmless) and correct in isolation; it only becomes a trap in combination
-  with a `serverModeEnabled()` that disagrees with it about what "server mode"
-  means.
-- **Fix (proposed):** make the two agree. Either `serverModeEnabled()` also
-  requires `STRIPE_WEBHOOK_SECRET`, or the webhook throws loudly when the
-  Supabase vars are set and its secret is not. Belongs to Revenue Rail —
-  entitlement code is its lane; Trust Ledger has documented the trap in
-  `.env.example` and `ADOPTING.md` in the meantime so the copy is honest
-  either way.
-- **Proof available today:** yes — no deploy needed. `serverModeEnabled()`
-  reads two vars, the webhook guard reads four, and
-  `emailHasActiveEntitlement()` returns `null` only when `getSupabase()` is
-  null or the query errors.
-
 ### R7 — The kit ships a refund promise that reads like finished copy — **Low**
 - **Where:** `kit.config.example.ts` → `upgrade.trustLine`: *"Secure payment via
   Stripe. 30-day refund, no questions asked. No account. No recurring
@@ -103,6 +64,31 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
   `REPLACE_ME` convention two fields above.
 
 ## Closed
+
+### R6 — Two of the three server-mode vars silently breaks restore for real buyers — **High** — CLOSED 2026-08-02
+- **Was:** `serverModeEnabled()` (`api/_lib.ts`) turned server mode on with
+  just `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`, while `ADOPTING.md`
+  promised three vars. Set those two and forget `STRIPE_WEBHOOK_SECRET`, and
+  every part behaved "correctly" into a hole: `emailHasActiveEntitlement()`
+  returned a real (always-`false`) boolean instead of `null`, so restore
+  never reached the Stripe fallback that would have found the purchase; the
+  webhook, missing its secret, quietly 200'd `{handled:false}` and never
+  wrote the `entitlements` table; Stripe recorded a successful delivery, so
+  no failed-webhook alert ever fired. A customer who really paid was told
+  "no purchase found," silently, forever.
+- **Fixed:** [#7](https://github.com/browningtons/appkit/pull/7) —
+  `serverModeEnabled()` now requires all three vars; a partial config (two of
+  three) leaves server mode off, so `verify-purchase` falls through to the
+  Stripe scan instead. New `serverModePartiallyConfigured()` lets the webhook
+  distinguish a half-configured server-mode app (500, so Stripe retries and
+  surfaces the failure) from a plain client-mode app (quiet 200, unchanged).
+  14 new tests pin both functions across all eight var combinations,
+  including that they can never both be true.
+- **Verified:** re-ran `npm test` this visit — 36/36 passing, including the
+  `serverModeEnabled` / `serverModePartiallyConfigured` suites. This repo's
+  own `docs/agent-backlog.md` and this register had not been reconciled with
+  the shipped fix; [docs/pack-ledger.md](https://github.com/browningtons/mission-control/blob/main/docs/pack-ledger.md)
+  already recorded the closure 2026-08-02 — only the local copies were stale.
 
 ### R5 — No `.env.example`; key hygiene lived only in code comments — **Low** — CLOSED 2026-07-31
 - **Was:** no canonical env manifest, and no written guardrail against pointing
