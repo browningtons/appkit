@@ -1,7 +1,7 @@
 // Demo app — a single page that exercises every kit primitive end to end.
 // Real apps replace this entirely; the kit lives under src/kit/.
 
-import { Sparkles, FileDown, Lock as LockIcon } from 'lucide-react';
+import { Sparkles, FileDown, Lock as LockIcon, Check, X } from 'lucide-react';
 import {
   AdminBar,
   LockedOverlay,
@@ -45,6 +45,31 @@ export default function App() {
           {auth.isPro && <ProBadge />}
         </div>
       </header>
+
+      {/* Reference rendering of useAuth().justPurchased — without this, a
+          buyer's only feedback that the gate cleared is the small header
+          badge. Adopters that skip this (unlike our-family-lizard and
+          debt-snowball-dolphin, which both hand-built it) ship silently. */}
+      {auth.justPurchased && (
+        <div className="bg-emerald-700 text-white">
+          <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center flex-shrink-0">
+              <Check size={16} />
+            </div>
+            <div className="flex-1 text-sm font-medium">
+              Payment received — {config.app.name} Pro is unlocked.
+            </div>
+            <button
+              type="button"
+              onClick={auth.dismissJustPurchased}
+              aria-label="Dismiss"
+              className="w-7 h-7 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors flex-shrink-0"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-2xl mx-auto p-4 space-y-6">
         <section className="bg-white rounded-2xl border border-stone-200 p-6">
