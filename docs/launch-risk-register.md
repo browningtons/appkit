@@ -46,45 +46,6 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
   upgrade in `ADOPTING.md`. Low until real volume.
 - **Proof available today:** N/A (infra change).
 
-### R6 — Two of the three server-mode vars silently breaks restore for real buyers — **High** · `[→ revenue-rail]`
-- **Where:** `api/_lib.ts:117` (`serverModeEnabled`), `api/stripe-webhook.ts:62`
-  (the ack-and-ignore guard), `api/verify-purchase.ts:111` (restore's early
-  return).
-- **Found:** 2026-07-31 by Trust Ledger, while writing the `.env.example` that
-  closes R5. The manifest is what made the asymmetry visible: the docs say
-  three variables turn server mode on; the code gates on two.
-- **Failure:** set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` and forget
-  `STRIPE_WEBHOOK_SECRET`, and every part behaves "correctly" into a hole:
-  1. `serverModeEnabled()` → `true` (it never checks the webhook secret), so
-     `emailHasActiveEntitlement()` returns a real boolean instead of `null`,
-     and restore-by-email **returns at `verify-purchase.ts:113` without ever
-     reaching the Stripe fallback below it.**
-  2. The webhook, missing its secret, hits the `!webhookSecret` guard and
-     returns `200 {received: true, handled: false}` — so the `entitlements`
-     table is never written, and **Stripe records a successful delivery**, so
-     no failed-webhook alert ever fires.
-  3. The table stays permanently empty, so the boolean from step 1 is always
-     `false`: a customer who really paid is told "no purchase found," and the
-     Stripe scan that would have found their session is skipped *because*
-     server mode is on.
-
-  Two of three is strictly worse than zero of three, and it is silent end to
-  end — no exception, no retry, no log line, no Stripe-side error. The `200`
-  in step 2 is deliberate (it makes adding the route to a client-mode app
-  harmless) and correct in isolation; it only becomes a trap in combination
-  with a `serverModeEnabled()` that disagrees with it about what "server mode"
-  means.
-- **Fix (proposed):** make the two agree. Either `serverModeEnabled()` also
-  requires `STRIPE_WEBHOOK_SECRET`, or the webhook throws loudly when the
-  Supabase vars are set and its secret is not. Belongs to Revenue Rail —
-  entitlement code is its lane; Trust Ledger has documented the trap in
-  `.env.example` and `ADOPTING.md` in the meantime so the copy is honest
-  either way.
-- **Proof available today:** yes — no deploy needed. `serverModeEnabled()`
-  reads two vars, the webhook guard reads four, and
-  `emailHasActiveEntitlement()` returns `null` only when `getSupabase()` is
-  null or the query errors.
-
 ### R7 — The kit ships a refund promise that reads like finished copy — **Low**
 - **Where:** `kit.config.example.ts` → `upgrade.trustLine`: *"Secure payment via
   Stripe. 30-day refund, no questions asked. No account. No recurring
@@ -103,6 +64,115 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
   `REPLACE_ME` convention two fields above.
 
 ## Closed
+
+### R8 — `npm ci` failed on `main`, and nothing audited dependencies at all — **Medium** — CLOSED 2026-08-02
+- **Was:** two gaps in the same seam, found on Launch Shield's first visit.
+  1. **No dependency audit anywhere.** CI ran lint/test/build; no `npm audit` on
+     push, on a schedule, or in any script. appkit's four production
+     dependencies (`stripe`, `@supabase/supabase-js`, `@vercel/analytics`,
+     `lucide-react`) are inherited by every adopter, so an advisory here is an
+     advisory in all of them — and this is the portfolio's *quietest* repo by
+     design (nine days between #5 and #7), so a push-triggered gate alone would
+     have been close to no gate.
+  2. **The lockfile did not resolve.** `npm ci` exited 1 on `main` for everyone,
+     on every platform: `lock file's @emnapi/wasi-threads@1.2.2 does not satisfy
+     @emnapi/wasi-threads@1.2.3`. The nested
+     `@tailwindcss/oxide-wasm32-wasi/node_modules/@emnapi/*` subtree had been
+     pruned away, leaving the file inconsistent with itself. An adopter cloning
+     the kit and running the documented install got an error.
+- **Why it was invisible:** CI installs with `npm install`, which re-resolves and
+  papers over exactly this. The green badge was truthful about `npm install` and
+  said nothing about `npm ci`. **A gate that cannot fail the way users fail is
+  not a gate** — the same shape as the disabled-workflow finding in
+  `economic-dashboard` and the paraphrased-prompt check in `portfolio.md`.
+- **Fixed:** shared `audit:deps` script (`npm audit --omit=dev --audit-level=low`)
+  called from CI, from `npm run verify`, and from a new daily
+  `dependency-audit.yml` that installs with `npm ci`; lockfile regenerated
+  (additive only — 6 entries restored, none removed, all five
+  `@tailwindcss/oxide-linux-*` binaries intact); `ADOPTING.md` gained a **Carry
+  the audit gate** section so adopters copy both halves.
+- **Verified:** `npm ci` 1 → 0 after the repair; `npm run verify` green (lint,
+  36/36 tests, build, **0 production vulnerabilities**); and the gate proved able
+  to go red — the same command without `--omit=dev` exits 1 against the dev tree.
+- **Left open deliberately:** 15 dev-tree advisories (1 critical `tar`, 10 high)
+  all trace to `@vercel/node`, whose only offered fix is a **major downgrade**.
+  Build-time only; reaches no adopter.
+- **Addendum 2026-08-16 (lockfile re-repaired; A8 still open):** the PR
+  carrying this fix sat unmerged for 13 days, so `dependency-audit.yml` never
+  ran on the default branch and the "prove `npm ci` on Linux first" plan
+  never got evidence — a repeat of the open-draft-is-invisible lesson. `npm
+  ci` had bit-rotted *again* by landing time, on a different
+  optional-platform subtree (`@rolldown/binding-wasm32-wasi`). Re-repaired
+  the same way (additive lockfile regen; verified `npm ci` + `npm run verify`
+  green). **Flipping `ci.yml` to `npm ci` (A8) was attempted but rejected by
+  GitHub** — the lane's push token lacks `workflow` scope to modify files
+  under `.github/workflows/`. A8 stays open, now correctly framed as a
+  permissions blocker rather than a design choice; see `agent-backlog.md`.
+
+### R6 — Two of the three server-mode vars silently breaks restore for real buyers — **High** — CLOSED 2026-08-02
+- **Was:** `serverModeEnabled()` (`api/_lib.ts`) turned server mode on with
+  just `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`, while `ADOPTING.md`
+  promised three vars. Set those two and forget `STRIPE_WEBHOOK_SECRET`, and
+  every part behaved "correctly" into a hole: `emailHasActiveEntitlement()`
+  returned a real (always-`false`) boolean instead of `null`, so restore
+  never reached the Stripe fallback that would have found the purchase; the
+  webhook, missing its secret, quietly 200'd `{handled:false}` and never
+  wrote the `entitlements` table; Stripe recorded a successful delivery, so
+  no failed-webhook alert ever fired. A customer who really paid was told
+  "no purchase found," silently, forever.
+- **Fixed:** [#7](https://github.com/browningtons/appkit/pull/7) —
+  `serverModeEnabled()` now requires all three vars; a partial config (two of
+  three) leaves server mode off, so `verify-purchase` falls through to the
+  Stripe scan instead. New `serverModePartiallyConfigured()` lets the webhook
+  distinguish a half-configured server-mode app (500, so Stripe retries and
+  surfaces the failure) from a plain client-mode app (quiet 200, unchanged).
+  14 new tests pin both functions across all eight var combinations,
+  including that they can never both be true.
+- **Verified:** re-ran `npm test` this visit — 36/36 passing, including the
+  `serverModeEnabled` / `serverModePartiallyConfigured` suites. This repo's
+  own `docs/agent-backlog.md` and this register had not been reconciled with
+  the shipped fix; [docs/pack-ledger.md](https://github.com/browningtons/mission-control/blob/main/docs/pack-ledger.md)
+  already recorded the closure 2026-08-02 — only the local copies were stale.
+
+### R8 — The kit never re-verifies Pro, so a refund never revokes on-device — **High** — CLOSED 2026-08-12
+- **Was:** `src/kit/auth/useAuth.ts` had no boot re-verify effect at all. Once
+  Pro was written to `localStorage` (checkout redirect, `#pro=1`, or
+  restore-by-email) it was permanent on that device by every route — the hook
+  read `load('pro', false)` on mount and never asked the backend again. So even
+  when a refund correctly flipped the server `entitlements` row to `refunded`
+  (server mode) or would have, the device that had already unlocked kept Pro
+  forever. The public claim in `README.md` (server mode "revoking access") and
+  `ADOPTING.md` was only half-true: the row was revoked, the device was not.
+  Because appkit is the reference kit, every future adopter shipped this — and
+  it is the **root** of the independently hand-built re-verifiers in
+  `our-family-lizard` (R15) and `debt-snowball-ant`.
+- **Distinct from R2:** R2 is the *endpoint's* client-mode Stripe scan ignoring
+  refund state (it answers `verified:true` for a refunded buyer). R8 is the
+  *client* never asking again. They compose: in **server mode** the endpoint is
+  refund-aware, so R8's re-verify now revokes end-to-end; in **client mode** the
+  device now re-asks, but the honest answer still waits on R2. R8 is the
+  plumbing; R2 is one source's truthfulness.
+- **Fixed by:** porting the proven pattern from
+  [our-family-lizard#44](https://github.com/browningtons/our-family-lizard/pull/44).
+  New `src/kit/auth/proReverify.ts` holds the pure policy: a 24h throttle
+  (`pro_last_verified_at`), a handle-preference plan (`cs_...` session id else
+  restore email), and an affirmative-only response mapper. `useAuth` gained a
+  mount-only boot re-verify effect that re-checks `/api/verify-purchase` (GET by
+  session id, POST by stored email), **revokes only on a 2xx `{verified:false}`**,
+  and **fails OPEN** on 429/5xx/network so a flaky backend never strips a paying
+  buyer. Restore now stores the email handle and both unlock paths seed the
+  throttle clock. The handle-less `#pro=1` instant unlock has nothing to
+  re-check and stays unlocked by design — documented, not silent.
+- **Verified:** `npm run lint && npm test && npm run build` green;
+  `proReverify.test.ts` adds 20 pure-policy tests (throttle boundary,
+  handle preference, affirmative-only revoke, fail-open on null/missing).
+  Suite 56/56 across 3 files.
+- **Build hygiene fixed en route:** `npm ci` was broken on `main` — the hoisted
+  `@emnapi/wasi-threads` node was pinned to `1.2.2` while `@tailwindcss/oxide-wasm32-wasi@4.2.4`
+  bundles `1.2.3`, so the lockfile was inconsistent with itself. Surgically
+  bumped that one node (authoritative registry integrity, no whole-lock regen).
+  CI uses `npm install`, which masked it — see backlog **A5** (switch CI to
+  `npm ci` + add the `verify` alias) for the durable guard.
 
 ### R5 — No `.env.example`; key hygiene lived only in code comments — **Low** — CLOSED 2026-07-31
 - **Was:** no canonical env manifest, and no written guardrail against pointing

@@ -1,10 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { load, save } from '../persistence';
+import { load, save, remove } from '../persistence';
 import { useKitConfig } from '../use-kit-config';
 import { trackProPurchase, trackRestoreAttempt } from '../analytics';
 import { parseActivation } from '../activation';
+import { reVerifyPlan, applyReVerifyResponse, type ReVerifyAction } from './proReverify';
 
 const JUST_PURCHASED_KEY = 'just_purchased';
+// The email a successful restore was proved with — the only handle a
+// restored device holds for the boot re-verify below (checkout leaves a
+// `cs_...` session id; restore leaves nothing else). Stored so a later refund
+// can revoke this device the same way the buyer originally unlocked it.
+const RESTORE_EMAIL_KEY = 'pro_restore_email';
+// Timestamp of the last *answered* re-verify. Seeds and throttles the boot
+// re-verify so a returning buyer is re-checked at most once per 24h.
+const LAST_VERIFIED_KEY = 'pro_last_verified_at';
 
 /**
  * Entitlement + admin state for the consuming app.
@@ -19,6 +28,15 @@ const JUST_PURCHASED_KEY = 'just_purchased';
  *   #pro=1                   → instant unlock (used by Stripe Payment Link)
  *   #session_id=cs_...       → verified unlock via /api/verify-purchase
  *   #admin                   → flips admin on
+ *
+ * Refund revocation: a boot re-verify (throttled to once per 24h) re-checks a
+ * verified unlock — by session id, or by the restore email — against
+ * `/api/verify-purchase`, and revokes Pro when the backend affirmatively
+ * reports it is no longer entitled (a refund). It fails OPEN on any 429/5xx or
+ * network error, so a flaky backend never strips Pro from a paying buyer.
+ * Policy lives in `proReverify.ts`. (A handle-less `#pro=1` unlock has nothing
+ * to re-check and stays unlocked — use a `session_id` success_url or server
+ * mode for refund-revocable entitlement.)
  *
  * Hidden admin: tap the logo `logoTapsToToggle` times within `tapWindowMs`.
  */
@@ -87,6 +105,10 @@ export function useAuth() {
             setIsProReal(true);
             save('pro', true);
             save('stripe_session_id', sessionId);
+            // Seed the throttle clock from this verify so the boot re-verify
+            // effect won't immediately re-check on the buyer's next visit — it
+            // fires 24h after this initial confirmation.
+            save(LAST_VERIFIED_KEY, Date.now());
             markJustPurchased();
             trackProPurchase();
           }
@@ -109,6 +131,58 @@ export function useAuth() {
   useEffect(() => {
     save('admin', isAdmin);
   }, [isAdmin]);
+
+  // Boot re-verify against the backend — catches refunds (or any revocation)
+  // that happened since this device last opened the app. Without it, a Pro
+  // unlock cached in localStorage is permanent on the device by every route
+  // and a refund never revokes. Decision policy lives in `proReverify.ts`;
+  // this effect is the I/O wrapper around it. Throttled to once per 24h, and
+  // it FAILS OPEN on any non-2xx (429 rate-limit, 5xx) or network error — a
+  // flaky backend must never strip Pro from a paying buyer.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const plan = reVerifyPlan({
+      isProReal,
+      sessionId: load<string>('stripe_session_id', ''),
+      restoreEmail: load<string>(RESTORE_EMAIL_KEY, ''),
+      lastCheck: load<number>(LAST_VERIFIED_KEY, 0),
+      now: Date.now(),
+    });
+    if (plan.kind === 'skip') return;
+
+    const settle = (action: ReVerifyAction) => {
+      // fail open: leave Pro and the throttle untouched so we retry next mount.
+      if (action.kind === 'fail_open') return;
+      save(LAST_VERIFIED_KEY, Date.now());
+      if (action.kind === 'revoke') {
+        setIsProReal(false);
+        save('pro', false);
+        remove('stripe_session_id');
+        remove(RESTORE_EMAIL_KEY);
+      }
+    };
+
+    // Both paths hit /api/verify-purchase and return { verified: boolean };
+    // read through the same wrapper so 429/5xx collapse to null → fail open.
+    const request =
+      plan.kind === 'session'
+        ? fetch(`/api/verify-purchase?session_id=${encodeURIComponent(plan.sessionId)}`)
+        : fetch('/api/verify-purchase', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ email: plan.email }),
+          });
+
+    request
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { verified?: boolean } | null) => settle(applyReVerifyResponse(data)))
+      .catch(() => {
+        /* fail open: leave Pro intact and the throttle untouched */
+      });
+    // Mount-only. Admin viewAs toggling shouldn't trigger backend calls, and a
+    // re-verify completing in this same effect doesn't need to re-fire.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Secret logo tap → toggle admin.
   const handleLogoTap = useCallback(() => {
@@ -151,6 +225,11 @@ export function useAuth() {
       if (data.verified) {
         setIsProReal(true);
         save('pro', true);
+        // Keep the email as the handle so the boot re-verify can revoke this
+        // device if the purchase is later refunded, and seed the throttle so
+        // the next boot doesn't immediately re-POST.
+        save(RESTORE_EMAIL_KEY, email.trim());
+        save(LAST_VERIFIED_KEY, Date.now());
         setUpgradeSource(null);
         trackRestoreAttempt(true);
         alert('Pro unlocked. Welcome back.');
