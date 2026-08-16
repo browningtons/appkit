@@ -163,4 +163,49 @@ server mode" forced a read of `serverModeEnabled()`, which checks two.
 
 ## Radical bets
 
-_(reserved for the Learning Loop wolf's weekly Pathfinder pass)_
+_(Learning Loop wolf, weekly Pathfinder pass — proposals for Paul to select,_
+_NOT auto-build. 2026-08-13, W33, lens = First-principles: rebuilt today,_
+_what would you refuse to carry over?)_
+
+**The bet: kill client-only mode, or demote it to an explicitly unsupported
+fallback — every real adopter runs server mode, and the client/server split is
+the single recurring source of this repo's entitlement bugs.** R1 (promo
+checkout didn't unlock), R2 (client-mode restore isn't refund-aware — A3 is
+still open and explicitly considers "just document the gap" an acceptable
+fix), and R6 (server mode silently half-enabled, buyers told "no purchase
+found") are three different symptoms of the same cause: two independent code
+paths that have to agree on what "entitled" means, checked against Stripe
+directly in one and against a mirrored Supabase table in the other. Both
+repos that actually ship on this kit — `our-family-lizard` and
+`debt-snowball-ant` — configure server mode. Client-only mode exists because
+the kit was designed to work without a backend; that constraint stopped being
+real the moment Supabase became a first-class kit dependency for auth. Why
+now: A6 just closed (`#7`, requiring all three server-mode vars) by adding a
+*third* rule to keep the two paths agreeing, which is treating the symptom
+again — the bug class won't stop producing R-numbers until the two paths
+become one. **Smallest slice: not a deletion.** Grep both adopters'
+`kit.config` for 100% server-mode usage (data, not assumption), then change
+nothing except the default: `serverModeEnabled() === false` starts emitting a
+loud console/build-time warning ("client-only mode is unsupported — refund
+and restore correctness are not guaranteed") instead of silently behaving as
+a first-class mode. That alone converts three future silent-entitlement bugs
+into one loud one, without breaking a hypothetical serverless adopter who
+doesn't exist yet. **Risk:** ADOPTING.md currently sells client-only mode as
+a legitimate zero-backend option; demoting it is a documented capability
+regression for a kit whose whole pitch is "adopt in an afternoon," so this is
+Paul's call on positioning, not just code.
+
+**Supporting bet: the placeholder legal copy (A7) should fail the build, not
+just look different.** `kit.config.example.ts` ships *"30-day refund, no
+questions asked"* as production-ready `trustLine` copy while every
+neighbouring field shouts `REPLACE_ME` — A7 proposes making it "an obvious
+placeholder," which still trusts every future adopter to notice and edit
+prose. First-principles: a refund promise is a legal commitment made on an
+adopter's behalf by a starter kit; nothing should let it ship un-reviewed.
+Smallest slice: if `trustLine` still equals the shipped example string at
+build time, fail the build (or at minimum `console.warn` at kit
+initialization, which A7 doesn't currently propose) rather than relying on a
+code comment. Effort is near-zero; the only reason to hold it is that a
+build-time string match is brittle against paraphrase, which is an
+acceptable gap — brittle-but-loud beats silent-but-flexible for a legal
+string.
