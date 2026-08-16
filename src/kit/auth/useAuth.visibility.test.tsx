@@ -63,6 +63,10 @@ beforeEach(() => {
   // (saved by the activation effect on the redirect mount) is present.
   localStorage.setItem('test_pro', 'true');
   localStorage.setItem('test_stripe_session_id', JSON.stringify('cs_test_visibility'));
+  // Seed the boot re-verify throttle as freshly checked, so the mount-time
+  // re-verify (proReverify.ts, 24h throttle) stays quiet and these tests
+  // isolate the visibilitychange path.
+  localStorage.setItem('test_pro_last_verified_at', JSON.stringify(Date.now()));
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
   window.history.replaceState(null, '', '/');
