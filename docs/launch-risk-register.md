@@ -135,8 +135,18 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
   to go red — the same command without `--omit=dev` exits 1 against the dev tree.
 - **Left open deliberately:** 15 dev-tree advisories (1 critical `tar`, 10 high)
   all trace to `@vercel/node`, whose only offered fix is a **major downgrade**.
-  Build-time only; reaches no adopter. Flipping CI itself to `npm ci` is **A8**,
-  held back one PR until the scheduled workflow proves `npm ci` on Linux.
+  Build-time only; reaches no adopter.
+- **Addendum 2026-08-16 (lockfile re-repaired; A8 still open):** the PR
+  carrying this fix sat unmerged for 13 days, so `dependency-audit.yml` never
+  ran on the default branch and the "prove `npm ci` on Linux first" plan
+  never got evidence — a repeat of the open-draft-is-invisible lesson. `npm
+  ci` had bit-rotted *again* by landing time, on a different
+  optional-platform subtree (`@rolldown/binding-wasm32-wasi`). Re-repaired
+  the same way (additive lockfile regen; verified `npm ci` + `npm run verify`
+  green). **Flipping `ci.yml` to `npm ci` (A8) was attempted but rejected by
+  GitHub** — the lane's push token lacks `workflow` scope to modify files
+  under `.github/workflows/`. A8 stays open, now correctly framed as a
+  permissions blocker rather than a design choice; see `agent-backlog.md`.
 
 ### R5 — No `.env.example`; key hygiene lived only in code comments — **Low** — CLOSED 2026-07-31
 - **Was:** no canonical env manifest, and no written guardrail against pointing

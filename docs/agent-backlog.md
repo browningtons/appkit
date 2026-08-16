@@ -51,22 +51,39 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   shouts `REPLACE_ME`. It is a binding refund promise made on an adopter's
   behalf, and it runs slightly ahead of what the kit does (R2/R3 open).
 
-### A8 — Flip CI from `npm install` to `npm ci` — **score 6**
+### A8 — Flip CI from `npm install` to `npm ci` — **score 6** — still open, now blocked on scope
 - Impact 3, Confidence 4, Risk Reduction 3, Effort −4.
-- `.github/workflows/ci.yml` still runs `npm install`, which is free to resolve
-  versions the lockfile does not pin — so CI can pass against a dependency tree
-  no adopter will ever get. **That is not hypothetical here: it is precisely what
-  hid the broken lockfile A5 repaired**, for however long it had been broken.
-  `npm install` cannot fail the way `npm ci` can, which is the whole reason to
-  prefer it in a reference kit.
-- **Not flipped in the same PR on purpose.** The repaired lockfile is verified on
-  macOS only. `dependency-audit.yml` now runs `npm ci` on Linux daily, so within
-  a day there is real evidence instead of an assumption — flip this after the
-  first few green scheduled runs. Betting the kit's only gate on an unproven
-  install is how a check ends up permanently red, which the pack has already
-  learned makes it a check nobody reads.
+- A5/R8 held this back pending "a day of evidence" from the scheduled
+  `dependency-audit.yml`. **That evidence never arrived — PR #8 sat unmerged
+  13 days**, so the scheduled workflow never ran on the default branch at all
+  (`gh workflow list` showed only `CI`). This run tried to land the flip
+  directly instead, on live proof (see the R8 addendum): `git push` was
+  **rejected by GitHub** — `refusing to allow a Personal Access Token to
+  create or update workflow .github/workflows/ci.yml without workflow
+  scope`. The lane's push token can edit every file in this repo except the
+  one this task needs to touch.
+- **Next wolf / a human with `workflow` scope:** the one-line change is
+  `- run: npm install` → `- run: npm ci` in `.github/workflows/ci.yml`,
+  already proven safe by this run's `npm ci` pass against the re-repaired
+  lockfile. Filed to Meseeks as a permissions follow-up; don't re-diagnose,
+  just apply it.
 
 ## Completed
+
+### R8 lockfile re-repair (bit-rot recurrence) — 2026-08-16
+*(Launch Shield; second Launch Shield visit to this repo)*
+
+Landed the unmerged PR #8 (open 13 days) carrying A5/R8. Verifying it first
+surfaced that `npm ci` had broken **again** in the interim — a *different*
+optional-platform subtree this time (`@rolldown/binding-wasm32-wasi`'s
+`@emnapi/*` deps, missing `1.11.3`) — the same bit-rot class recurring within
+two weeks, and exactly the scenario A8 exists to catch on push instead of
+waiting for a quiet repo's schedule. Regenerated with
+`npm install --package-lock-only --ignore-scripts`; diff is additive
+(`@emnapi/core`/`@emnapi/runtime` restored) plus benign `peer` flag
+normalization from a newer local npm, nothing removed. Verified: `npm ci`
+now succeeds; `npm run verify` green (36/36 tests, clean lint, clean build);
+`npm run audit:deps` 0 production vulnerabilities.
 
 ### A5 — `npm run verify` alias + dependency-audit gate, on push *and* on a clock — 2026-08-02
 *(Launch Shield; first Launch Shield visit to this repo)*
