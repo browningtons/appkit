@@ -128,6 +128,36 @@ export function useAuth() {
   useEffect(() => {
     save('pro', isProReal);
   }, [isProReal]);
+
+  // Re-verify the purchase when the tab regains visibility. The activation
+  // effect above calls /api/verify-purchase exactly once — on the mount that
+  // carries the Stripe redirect — so a refund processed while this tab sat
+  // backgrounded (or the laptop slept) would otherwise go undetected until
+  // the buyer's next full reload. Only devices holding a `cs_...` session id
+  // can re-check (the #pro=1 and restore-by-email paths leave no handle
+  // behind). We revoke only on an explicit `verified: false` and fail open
+  // on network errors or a drifted response shape — never strip Pro from a
+  // buyer because of a blip.
+  useEffect(() => {
+    if (!isProReal) return;
+    const recheck = () => {
+      if (document.visibilityState !== 'visible') return;
+      const sessionId = load<string>('stripe_session_id', '');
+      if (!sessionId.startsWith('cs_')) return;
+      fetch(`/api/verify-purchase?session_id=${encodeURIComponent(sessionId)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: { verified?: boolean } | null) => {
+          if (data?.verified === false) {
+            setIsProReal(false);
+          }
+        })
+        .catch(() => {
+          /* network — fail open, keep Pro */
+        });
+    };
+    document.addEventListener('visibilitychange', recheck);
+    return () => document.removeEventListener('visibilitychange', recheck);
+  }, [isProReal]);
   useEffect(() => {
     save('admin', isAdmin);
   }, [isAdmin]);
