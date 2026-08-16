@@ -31,19 +31,6 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   before granting in client mode, or explicitly document in `ADOPTING.md` that
   refund revocation requires server mode. Prefer the doc + a smaller code guard.
 
-### A6 — Make `serverModeEnabled()` and the webhook agree — **score 13** · `[→ revenue-rail]`
-- Impact 5, Confidence 5, Risk Reduction 5, Effort −2.
-- Closes **R6 (High)**, found 2026-07-31 while writing the A4 manifest. Setting
-  `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` without `STRIPE_WEBHOOK_SECRET`
-  turns server mode on, stops restore falling back to Stripe, and leaves the
-  `entitlements` table permanently empty — so paying customers are told "no
-  purchase found," silently, with Stripe reporting successful webhook delivery.
-- Either make `serverModeEnabled()` require the webhook secret too, or make the
-  webhook fail loudly when the Supabase vars are set and its secret is not.
-  **This is the top item in the repo** — it loses real buyers their access.
-- Entitlement code is Revenue Rail's lane; Trust Ledger has documented the trap
-  in `.env.example` and `ADOPTING.md` so the copy is honest until the code is.
-
 ### A7 — Make the shipped `trustLine` an obvious placeholder — **score 6**
 - Impact 2, Confidence 5, Risk Reduction 1, Effort −2.
 - Closes **R7 (Low)**. `kit.config.example.ts` ships *"30-day refund, no
@@ -138,6 +125,24 @@ through a pipe.**
 all trace to `@vercel/node`, whose only offered "fix" is a **major downgrade**
 to 4.0.0. They are build-time only and reach no adopter. Ported from
 [debt-snowball-ant#139](https://github.com/browningtons/debt-snowball-ant/pull/139).
+
+### A6 — Make `serverModeEnabled()` and the webhook agree — 2026-08-02
+*(Revenue Rail; [PR #7](https://github.com/browningtons/appkit/pull/7))*
+
+Closed **R6 (High)**. `serverModeEnabled()` now requires all three server-mode
+vars (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_WEBHOOK_SECRET`);
+two of three leaves server mode off so `verify-purchase` falls through to the
+Stripe scan instead of trusting an always-empty `entitlements` table. New
+`serverModePartiallyConfigured()` makes the webhook 500 (Stripe retries and
+surfaces it) on a half-configured server-mode app, vs. a quiet 200 for a
+plain client-mode one. 14 new tests across all eight var combinations.
+
+This entry was reconciled into Completed on **2026-08-13** (Revenue Rail) —
+the fix landed 11 days earlier and [docs/pack-ledger.md](https://github.com/browningtons/mission-control/blob/main/docs/pack-ledger.md)
+already recorded the closure, but this repo's own backlog and risk register
+still listed A6/R6 as open `[→ revenue-rail]`, which would have wasted the
+next wolf's pick. See the same fix in
+[docs/launch-risk-register.md](launch-risk-register.md) `## Closed`.
 
 ### A8 — Boot re-verify so a refund revokes on-device — 2026-08-12
 *(closes R8 (High); ports our-family-lizard#44)*
