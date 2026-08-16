@@ -1,0 +1,54 @@
+####
+# Scheduled dependency audit.
+#
+# The CI workflow runs `npm run audit:deps`, but only on push and pull_request.
+# That means it can only ever catch an advisory published *at the moment someone
+# happens to push* — and appkit is the pack's quietest repo by design: a
+# reference kit is finished on purpose. Between #5 (2026-07-24) and #7
+# (2026-08-02) nothing was pushed here for nine days. A quiet repo is not a safe
+# repo, it is an unaudited one, and the last green badge says nothing about
+# today.
+#
+# That matters more here than anywhere else in the portfolio: appkit's four
+# production dependencies (stripe, @supabase/supabase-js, @vercel/analytics,
+# lucide-react) are inherited by every app that adopts the kit, so an advisory
+# landing here is an advisory landing in all of them at once.
+#
+# It deliberately runs `npm run audit:deps` — the identical script CI and
+# `npm run verify` use — so the scheduled gate and the push gate cannot drift
+# apart. Ported from debt-snowball-ant#139 (Launch Shield, 2026-07-30).
+#
+# A failing run is picked up by the watchtower's pipeline sweep and barks like
+# any other red workflow; a run that stops appearing barks as "went silent."
+####
+name: Dependency audit
+
+on:
+  schedule:
+    # Daily at 14:00 UTC, matching debt-snowball-ant. Clear of the agent pack's
+    # working window.
+    - cron: '0 14 * * *'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: Audit production dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci` rather than CI's `npm install`: it also catches a lockfile that
+      # no longer resolves — a yanked or removed version is a dependency-safety
+      # failure even when no advisory exists.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit (production deps only)
+        run: npm run audit:deps
