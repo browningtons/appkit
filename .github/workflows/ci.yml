@@ -18,3 +18,8 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+      # Runs the same script as `npm run verify` and the scheduled
+      # Dependency audit workflow, so the three gates cannot drift apart.
+      - name: Audit (production deps only)
+        run: npm run audit:deps

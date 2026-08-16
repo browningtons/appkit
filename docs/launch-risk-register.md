@@ -104,6 +104,50 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
 
 ## Closed
 
+### R8 — `npm ci` failed on `main`, and nothing audited dependencies at all — **Medium** — CLOSED 2026-08-02
+- **Was:** two gaps in the same seam, found on Launch Shield's first visit.
+  1. **No dependency audit anywhere.** CI ran lint/test/build; no `npm audit` on
+     push, on a schedule, or in any script. appkit's four production
+     dependencies (`stripe`, `@supabase/supabase-js`, `@vercel/analytics`,
+     `lucide-react`) are inherited by every adopter, so an advisory here is an
+     advisory in all of them — and this is the portfolio's *quietest* repo by
+     design (nine days between #5 and #7), so a push-triggered gate alone would
+     have been close to no gate.
+  2. **The lockfile did not resolve.** `npm ci` exited 1 on `main` for everyone,
+     on every platform: `lock file's @emnapi/wasi-threads@1.2.2 does not satisfy
+     @emnapi/wasi-threads@1.2.3`. The nested
+     `@tailwindcss/oxide-wasm32-wasi/node_modules/@emnapi/*` subtree had been
+     pruned away, leaving the file inconsistent with itself. An adopter cloning
+     the kit and running the documented install got an error.
+- **Why it was invisible:** CI installs with `npm install`, which re-resolves and
+  papers over exactly this. The green badge was truthful about `npm install` and
+  said nothing about `npm ci`. **A gate that cannot fail the way users fail is
+  not a gate** — the same shape as the disabled-workflow finding in
+  `economic-dashboard` and the paraphrased-prompt check in `portfolio.md`.
+- **Fixed:** shared `audit:deps` script (`npm audit --omit=dev --audit-level=low`)
+  called from CI, from `npm run verify`, and from a new daily
+  `dependency-audit.yml` that installs with `npm ci`; lockfile regenerated
+  (additive only — 6 entries restored, none removed, all five
+  `@tailwindcss/oxide-linux-*` binaries intact); `ADOPTING.md` gained a **Carry
+  the audit gate** section so adopters copy both halves.
+- **Verified:** `npm ci` 1 → 0 after the repair; `npm run verify` green (lint,
+  36/36 tests, build, **0 production vulnerabilities**); and the gate proved able
+  to go red — the same command without `--omit=dev` exits 1 against the dev tree.
+- **Left open deliberately:** 15 dev-tree advisories (1 critical `tar`, 10 high)
+  all trace to `@vercel/node`, whose only offered fix is a **major downgrade**.
+  Build-time only; reaches no adopter.
+- **Addendum 2026-08-16 (lockfile re-repaired; A8 still open):** the PR
+  carrying this fix sat unmerged for 13 days, so `dependency-audit.yml` never
+  ran on the default branch and the "prove `npm ci` on Linux first" plan
+  never got evidence — a repeat of the open-draft-is-invisible lesson. `npm
+  ci` had bit-rotted *again* by landing time, on a different
+  optional-platform subtree (`@rolldown/binding-wasm32-wasi`). Re-repaired
+  the same way (additive lockfile regen; verified `npm ci` + `npm run verify`
+  green). **Flipping `ci.yml` to `npm ci` (A8) was attempted but rejected by
+  GitHub** — the lane's push token lacks `workflow` scope to modify files
+  under `.github/workflows/`. A8 stays open, now correctly framed as a
+  permissions blocker rather than a design choice; see `agent-backlog.md`.
+
 ### R8 — The kit never re-verifies Pro, so a refund never revokes on-device — **High** — CLOSED 2026-08-12
 - **Was:** `src/kit/auth/useAuth.ts` had no boot re-verify effect at all. Once
   Pro was written to `localStorage` (checkout redirect, `#pro=1`, or
