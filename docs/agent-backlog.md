@@ -169,6 +169,54 @@ whole-lock regen). **Blast-radius follow-up:** file Meseeks checks that
 `our-family-lizard` and `debt-snowball-ant` match this kit shape (they should —
 this was ported *from* their fixes).
 
+### A8 — Promote the purchase-celebration banner from demo to a shared kit component — **score 6**
+- Impact 3, Confidence 4, Risk Reduction 1, Effort −2.
+- Found 2026-08-13 by **User Journey** while fixing the demo (see A9 below —
+  Completed). `our-family-lizard` and `debt-snowball-dolphin` each hand-built
+  their own post-purchase confirmation banner around the same
+  `justPurchased`/`dismissJustPurchased` hook state, independently, because the
+  kit never shipped one. The demo fix proves the pattern but still leaves every
+  *new* adopter to build their own copy from scratch, same as the two existing
+  ones did.
+- **Fix (proposed):** extract a small `<PurchaseConfirmation>` (or similarly
+  named) component under `src/kit/components/`, export it from `src/kit/index.ts`
+  alongside `UpgradeModal`/`LockedOverlay`/`ProBadge`/`AdminBar`, and swap the demo
+  to use it. Not done in the same change as A9 — new shared component +
+  export-surface change is a larger, separate unit of work than wiring existing
+  state into the existing demo.
+
+### A5 — Add an `npm run verify` alias + dependency-audit CI step — **score 7**
+- Impact 3, Confidence 4, Risk Reduction 2, Effort −2.
+- CI runs lint/test/build but there's no `verify` alias (the canonical loop assumes
+  one) and no `npm audit` gate. Add `"verify": "npm run lint && npm test && npm run build"`
+  and an audit step (watch the recurring **dompurify** CVE the pack has hit 3×).
+
+## Completed
+
+### A9 — Render the post-purchase celebration in the reference demo — 2026-08-13
+*(User Journey; [PR #10](https://github.com/browningtons/appkit/pull/10))*
+
+`useAuth()` has returned `justPurchased`/`dismissJustPurchased` since the kit's
+first cut, documented in its own JSDoc as existing "to show a celebration
+banner once after a successful Stripe redirect" — but `src/App.tsx`, the demo
+that claims to "exercise every kit primitive end to end," never rendered it. A
+first-time buyer on a fresh, unmodified appkit app completed checkout and got
+no confirmation beyond a small `ProBadge` appearing in the header.
+
+Traced the gate-friction journey (fresh load → premium gate → `UpgradeModal` →
+simulated Stripe redirect) and found the state was computed and returned but
+had zero consumers anywhere in the repo (`grep -rn justPurchased src/` outside
+`useAuth.ts` was empty). Downstream, `our-family-lizard` and
+`debt-snowball-dolphin` each independently hand-built the same banner —
+confirming this is a real, recurring gap, not a hypothetical one.
+
+Wired it into the demo with a small dismissible emerald confirmation bar,
+matching the pattern both downstream apps converged on. Demo-only change; no
+`src/kit/` primitives, entitlement logic, or Stripe/webhook code touched.
+Verified: `npm run lint` clean, `npm test` 36/36, `npm run build` succeeds.
+Seeds **A8** (promote this to a proper shared kit component, not just a demo
+fix) for a future visit.
+
 ### A4 — Add `.env.example` + test/live key-hygiene note — 2026-07-31
 *(Trust Ledger; closes R5, and turned up R6/A7 on the way)*
 
