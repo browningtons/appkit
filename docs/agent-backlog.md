@@ -38,7 +38,7 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   shouts `REPLACE_ME`. It is a binding refund promise made on an adopter's
   behalf, and it runs slightly ahead of what the kit does (R2/R3 open).
 
-### A8 — Flip CI from `npm install` to `npm ci` — **score 6** — still open, now blocked on scope
+### ~~A8~~ CLOSED 2026-08-25 — flipped by hand with `workflow` scope (see Completed)
 - Impact 3, Confidence 4, Risk Reduction 3, Effort −4.
 - A5/R8 held this back pending "a day of evidence" from the scheduled
   `dependency-audit.yml`. **That evidence never arrived — PR #8 sat unmerged
@@ -56,6 +56,18 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   just apply it.
 
 ## Completed
+
+### A8 CI flips to `npm ci` — 2026-08-25
+*(Applied by hand exactly as the A8 entry asked — no re-diagnosis.)*
+
+Paul decided **keep the audit + fix properly** on the 4×-failed escalation card
+(the audit was green three scheduled runs straight after the 8/22 lockfile
+repair, #14). The one-line flip (`npm install` → `npm ci` in
+`.github/workflows/ci.yml`) landed from a session running with Paul's own
+credentials, which carry the `workflow` scope the lane token lacks — the
+scope gap itself is still tracked in Meseeks as the PAT follow-up. With this,
+lockfile bit-rot fails CI on the offending push instead of waiting for the
+quiet repo's scheduled audit to notice.
 
 ### R8 lockfile re-repair (bit-rot recurrence) — 2026-08-16
 *(Launch Shield; second Launch Shield visit to this repo)*
