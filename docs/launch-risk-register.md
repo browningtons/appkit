@@ -46,22 +46,28 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
   upgrade in `ADOPTING.md`. Low until real volume.
 - **Proof available today:** N/A (infra change).
 
-### R7 — The kit ships a refund promise that reads like finished copy — **Low**
-- **Where:** `kit.config.example.ts` → `upgrade.trustLine`: *"Secure payment via
+## Closed
+
+### R7 — The kit ships a refund promise that reads like finished copy — **Low** — CLOSED 2026-09-04
+- **Was:** `kit.config.example.ts` → `upgrade.trustLine`: *"Secure payment via
   Stripe. 30-day refund, no questions asked. No account. No recurring
-  charges."*
-- **Failure:** every other placeholder in that file announces itself —
-  `pk_live_REPLACE_ME`, `price_REPLACE_ME`, `'Feature one'`, `'Your App'`. The
-  trust line is the one field that reads as production-ready, so it is the one
-  most likely to ship unedited — and it is a **binding public promise about
-  refunds**, made on behalf of an adopter who never chose it. It also sits
-  slightly ahead of what the kit does: R2 (client-mode restore is not
-  refund-aware) and R3 (a partial refund revokes full access) are both open.
-- **Fix (proposed):** make it obviously a placeholder, consistent with its
-  neighbours — e.g. `'REPLACE_ME: your refund and billing promise'` — so an
-  adopter has to make the claim deliberately.
-- **Proof available today:** yes — read the file; compare against the
-  `REPLACE_ME` convention two fields above.
+  charges."* — production-ready prose while every neighbouring field shouted
+  `REPLACE_ME`. It's a binding public promise about refunds made on an
+  adopter's behalf, and it ran slightly ahead of what the kit does: R2
+  (client-mode restore is not refund-aware) and R3 (a partial refund revokes
+  full access) are both still open.
+- **Fixed:** `trustLine` now reads `'REPLACE_ME: your refund and billing
+  promise (e.g. ...)'`, consistent with the `pk_live_REPLACE_ME` /
+  `price_REPLACE_ME` convention two fields above, plus a comment at the field
+  pointing at R2/R3 so an adopter who does fill it in sees why "no questions
+  asked" isn't true yet. `lint`/`build` verified green.
+- **Left open deliberately — copy-only fix, not the stronger one the backlog
+  scoped.** `docs/agent-backlog.md`'s "supporting bet" on A7 proposed failing
+  the build (or `console.warn` at kit init) if `trustLine` still equals the
+  shipped string — brittle-but-loud beats silent-but-flexible for a legal
+  string. That's a code-behavior guard, not a copy fix, so it's filed to
+  Launch Shield rather than done here: `[→ launch-shield]` wire a
+  build-time or init-time check that `trustLine` was actually edited.
 
 ## Closed
 
