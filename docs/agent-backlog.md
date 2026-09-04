@@ -57,6 +57,29 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
 
 ## Completed
 
+### A7 follow-up — kit-init warns if `trustLine` is still a shipped placeholder — 2026-09-04
+*(Launch Shield; claims a `[→ launch-shield]` handoff filed by Trust Ledger against
+this repo, same day, for a copy-only fix to A7/R7)*
+
+Trust Ledger's same-day pass (PR #16, open as of this writing) makes
+`kit.config.example.ts`'s `upgrade.trustLine` an obvious `REPLACE_ME:`
+placeholder instead of finished-looking prose, and filed the stronger,
+code-behavior half of the fix here: a build-time or kit-init check that
+fails/warns if `trustLine` still equals the shipped string. Implemented as a
+runtime check in `src/kit/config.ts#setKitConfig`, not a build-time check —
+`KitProvider` calls `setKitConfig` on every mount in every consuming app
+regardless of that app's own build tooling, so it's the one place guaranteed
+to run for every adopter. If `upgrade.trustLine` still equals either shipped
+placeholder — the pre-A7 prose currently on `main`, or the post-A7
+`REPLACE_ME:` string on #16 — `console.error`s a loud, specific message.
+Matching both keeps the check correct regardless of which PR merges first.
+Both real adopters (`our-family-lizard`, `debt-snowball-ant`) and the demo
+(`kit.config.ts`) already ship a real `trustLine`, so this fires for nobody
+today — it only catches the next adopter who copies the example and skips
+that field. 4 new tests in `src/kit/config.test.ts` (fires on each
+placeholder variant, silent once replaced, config still gets set either
+way). `npm run verify` green (lint, 63 tests, build, 0 audit findings).
+
 ### A8 CI flips to `npm ci` — 2026-08-25
 *(Applied by hand exactly as the A8 entry asked — no re-diagnosis.)*
 

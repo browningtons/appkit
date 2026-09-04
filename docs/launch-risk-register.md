@@ -62,6 +62,14 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
   adopter has to make the claim deliberately.
 - **Proof available today:** yes — read the file; compare against the
   `REPLACE_ME` convention two fields above.
+- **Addendum 2026-09-04 (Launch Shield):** the copy fix above is Trust
+  Ledger's (in flight, PR #16). Landed the other half here, ahead of that
+  PR: `setKitConfig` (`src/kit/config.ts`) now `console.error`s if
+  `upgrade.trustLine` still equals a shipped placeholder — checked against
+  both the current `main` prose and #16's `REPLACE_ME:` variant, so it's
+  correct however the two land. Runs at kit-init in every adopter
+  regardless of that adopter's own build tooling. See `agent-backlog.md`'s
+  Completed section.
 
 ## Closed
 
