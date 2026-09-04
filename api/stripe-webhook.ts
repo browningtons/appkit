@@ -28,6 +28,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
 import {
   entitlementFromSession,
+  isFullRefund,
   recordEntitlement,
   revokeByPaymentIntent,
   serverModeEnabled,
@@ -119,6 +120,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       case 'charge.refunded': {
         const charge = event.data.object;
+        // charge.refunded fires on partial refunds too — a $1 partial
+        // refund on a $50 purchase must not revoke the whole entitlement.
+        if (!isFullRefund(charge)) break;
         const pi =
           typeof charge.payment_intent === 'string'
             ? charge.payment_intent
