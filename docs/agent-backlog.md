@@ -19,12 +19,6 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   `our-family-lizard` and `debt-snowball-dolphin` for the same `=== 'paid'` literal.
 - Highest-value first mission item — do this before anything else.
 
-### A2 — Don't revoke Pro on a partial refund — **score 10**
-- Impact 4, Confidence 4, Risk Reduction 4, Effort −2.
-- Closes **R3 (Medium)**. Extract `isFullRefund(charge)` (compare
-  `amount_refunded` to `amount`), only `revokeByPaymentIntent` when full. Unit-test
-  full-vs-partial. Consider `charge.dispute.created`.
-
 ### A3 — Make client-mode restore refund-aware (or document the gap) — **score 8**
 - Impact 4, Confidence 3, Risk Reduction 3, Effort −2.
 - Closes **R2 (Medium)**. Either check refund state on the matched paid session
@@ -56,6 +50,48 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   just apply it.
 
 ## Completed
+
+### A10 — Revoke Pro on a lost chargeback — 2026-09-06
+*(Revenue Rail)*
+
+Closes **R9 (Medium)**. `stripe-webhook.ts` handled `charge.refunded` but had
+no case for `charge.dispute.closed` — a lost chargeback pulls the same money
+back as a refund, but the entitlements row never flipped, so a buyer who won
+a dispute kept Pro forever. New case revokes only on `dispute.status ===
+'lost'` (won / still-open disputes leave the charge intact); dispute events
+carry `charge` as a bare id, so it's fetched via `stripe.charges.retrieve()`
+first. Factored the existing inline payment-intent extraction out of
+`charge.refunded` into a shared `paymentIntentIdFromCharge()` in `api/_lib.ts`
+so both cases use it. Ported from `debt-snowball-ant`
+([#147](https://github.com/browningtons/debt-snowball-ant/pull/147)), which
+closed the identical gap first — appkit was the last carrier, so this
+propagates the fix to every future adopter. 3 new tests in `api/_lib.test.ts`.
+`npm run verify` green (lint, 66/66 tests, build, 0 audit findings). Not
+verified against live/test Stripe (pack safety line); the webhook destination
+still needs `charge.dispute.closed` subscribed before Stripe delivers it.
+`our-family-lizard` still has the same-shaped gap (no webhook; its live
+refund check also only reads `charge.refunded`) — filed to Meseeks as a
+follow-up rather than fixed here.
+
+### A2 — Don't revoke Pro on a partial refund — 2026-09-04
+*(Revenue Rail)*
+
+Closes **R3 (Medium)**. `stripe-webhook.ts`'s `charge.refunded` case called
+`revokeByPaymentIntent` unconditionally — that event fires on partial refunds
+too, so a $1 partial refund on a $50 Pro purchase flipped the entitlement row
+to `refunded` and revoked all access, same as a full refund. New
+`isFullRefund(charge)` in `api/_lib.ts` requires **both** `charge.refunded ===
+true` and `amount_refunded >= amount` to agree the refund is complete before
+the webhook revokes; the handler now `break`s out on a partial refund and
+leaves the entitlement untouched. 4 new tests in `api/_lib.test.ts` (partial
+refund → false, full refund → true, amount reaches total but the `refunded`
+flag hasn't caught up → false, no refund → false). `npm run verify` green
+(lint, 67/67 tests, build). `charge.dispute.created`/chargeback handling
+(mentioned in R3's original text) is out of scope for this change — filed to
+Meseeks as a follow-up, and `debt-snowball-ant` already closed the chargeback
+half in [#147](https://github.com/browningtons/debt-snowball-ant/pull/147)
+(`charge.dispute.closed` revokes Pro), so appkit is the one adopter still
+missing it.
 
 ### A8 CI flips to `npm ci` — 2026-08-25
 *(Applied by hand exactly as the A8 entry asked — no re-diagnosis.)*

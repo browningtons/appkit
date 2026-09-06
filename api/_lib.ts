@@ -198,6 +198,34 @@ export async function recordEntitlement(row: EntitlementRow): Promise<boolean> {
   return true;
 }
 
+/**
+ * True only when a charge has been refunded in full.
+ *
+ * `charge.refunded` (Stripe's own "fully refunded" flag) and
+ * `charge.amount_refunded >= charge.amount` (belt-and-suspenders against a
+ * currency oddity where the boolean lags the amounts) both have to agree the
+ * refund is complete before the caller may treat this as "take the access
+ * back." A partial refund satisfies neither.
+ */
+export function isFullRefund(
+  charge: Pick<Stripe.Charge, 'refunded' | 'amount' | 'amount_refunded'>,
+): boolean {
+  return charge.refunded === true && charge.amount_refunded >= charge.amount;
+}
+
+/**
+ * Read a charge's payment intent id, whichever form Stripe sent it in — a
+ * bare id string on most events, an expanded object when the API call that
+ * produced it asked for one.
+ */
+export function paymentIntentIdFromCharge(
+  charge: Pick<Stripe.Charge, 'payment_intent'>,
+): string | null {
+  return typeof charge.payment_intent === 'string'
+    ? charge.payment_intent
+    : (charge.payment_intent?.id ?? null);
+}
+
 /** Flip any entitlement(s) for a payment intent to refunded. */
 export async function revokeByPaymentIntent(
   paymentIntentId: string,

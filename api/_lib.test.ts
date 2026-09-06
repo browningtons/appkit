@@ -3,6 +3,8 @@ import {
   lineItemMatchesPro,
   entitlementFromSession,
   sessionIsSettled,
+  isFullRefund,
+  paymentIntentIdFromCharge,
   serverModeEnabled,
   serverModePartiallyConfigured,
 } from './_lib';
@@ -71,6 +73,63 @@ describe('sessionIsSettled', () => {
 
   it('does not treat unpaid sessions as settled', () => {
     expect(sessionIsSettled('unpaid')).toBe(false);
+  });
+});
+
+function charge(overrides: Record<string, unknown> = {}) {
+  return {
+    refunded: false,
+    amount: 5000,
+    amount_refunded: 0,
+    ...overrides,
+  } as Parameters<typeof isFullRefund>[0];
+}
+
+describe('isFullRefund', () => {
+  it('is FALSE for a partial refund — a $1 refund on a $50 charge must not revoke Pro', () => {
+    expect(isFullRefund(charge({ amount_refunded: 100 }))).toBe(false);
+  });
+
+  it('is TRUE when the charge is refunded in full', () => {
+    expect(
+      isFullRefund(charge({ refunded: true, amount_refunded: 5000 })),
+    ).toBe(true);
+  });
+
+  it('is FALSE if amount_refunded reaches the total but the refunded flag has not caught up', () => {
+    // Defends the "both must agree" contract — trusting amounts alone would
+    // revoke on a currency edge case Stripe itself hasn't called complete yet.
+    expect(isFullRefund(charge({ refunded: false, amount_refunded: 5000 }))).toBe(false);
+  });
+
+  it('is FALSE with no refund at all', () => {
+    expect(isFullRefund(charge())).toBe(false);
+  });
+});
+
+describe('paymentIntentIdFromCharge', () => {
+  it('reads a bare payment_intent id string', () => {
+    expect(
+      paymentIntentIdFromCharge({ payment_intent: 'pi_123' } as Parameters<
+        typeof paymentIntentIdFromCharge
+      >[0]),
+    ).toBe('pi_123');
+  });
+
+  it('reads the id off an expanded payment_intent object', () => {
+    expect(
+      paymentIntentIdFromCharge({
+        payment_intent: { id: 'pi_456' },
+      } as Parameters<typeof paymentIntentIdFromCharge>[0]),
+    ).toBe('pi_456');
+  });
+
+  it('is null when the charge has no payment_intent at all', () => {
+    expect(
+      paymentIntentIdFromCharge({ payment_intent: null } as Parameters<
+        typeof paymentIntentIdFromCharge
+      >[0]),
+    ).toBeNull();
   });
 });
 
