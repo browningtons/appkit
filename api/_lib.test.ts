@@ -4,6 +4,7 @@ import {
   entitlementFromSession,
   sessionIsSettled,
   isFullRefund,
+  paymentIntentIdFromCharge,
   serverModeEnabled,
   serverModePartiallyConfigured,
 } from './_lib';
@@ -103,6 +104,32 @@ describe('isFullRefund', () => {
 
   it('is FALSE with no refund at all', () => {
     expect(isFullRefund(charge())).toBe(false);
+  });
+});
+
+describe('paymentIntentIdFromCharge', () => {
+  it('reads a bare payment_intent id string', () => {
+    expect(
+      paymentIntentIdFromCharge({ payment_intent: 'pi_123' } as Parameters<
+        typeof paymentIntentIdFromCharge
+      >[0]),
+    ).toBe('pi_123');
+  });
+
+  it('reads the id off an expanded payment_intent object', () => {
+    expect(
+      paymentIntentIdFromCharge({
+        payment_intent: { id: 'pi_456' },
+      } as Parameters<typeof paymentIntentIdFromCharge>[0]),
+    ).toBe('pi_456');
+  });
+
+  it('is null when the charge has no payment_intent at all', () => {
+    expect(
+      paymentIntentIdFromCharge({ payment_intent: null } as Parameters<
+        typeof paymentIntentIdFromCharge
+      >[0]),
+    ).toBeNull();
   });
 });
 

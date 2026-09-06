@@ -55,6 +55,38 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
 
 ## Closed
 
+### R9 — A lost chargeback never revoked Pro — **Medium** — CLOSED 2026-09-06
+- **Was:** `api/stripe-webhook.ts` handled `charge.refunded` but had no case for
+  `charge.dispute.closed` — the cardholder-initiated equivalent of a refund. A
+  lost dispute pulls the same money back via the card network, but the
+  entitlements row never flipped to `refunded`, so a buyer who won a
+  chargeback kept Pro forever: worse than an ordinary refund, since they keep
+  both the money and the product, and it needs no support cooperation. This
+  was the deliberately-left-open half of R3 (below) — filed to Meseeks as a
+  follow-up rather than fixed in that PR.
+- **Fixed:** new `charge.dispute.closed` case revokes only when
+  `dispute.status === 'lost'` (`won` and the `warning_*` statuses leave the
+  charge intact, so revoking on those would strip a legitimate buyer's
+  access on a false signal). Dispute events carry `charge` as a bare id, not
+  expanded, so a `stripe.charges.retrieve()` round-trip resolves it before
+  the shared `paymentIntentIdFromCharge()` helper (also now used by
+  `charge.refunded`) reads the payment intent for `revokeByPaymentIntent`.
+  Ported from `debt-snowball-ant`
+  ([#147](https://github.com/browningtons/debt-snowball-ant/pull/147)), which
+  closed the identical gap first; appkit is the reference kit, so it was the
+  last carrier.
+- **Verified:** 3 new tests in `api/_lib.test.ts` for `paymentIntentIdFromCharge`
+  (bare id, expanded object, null). `npm run verify` green — lint, 66/66
+  tests, build, 0 audit findings. Not verified against live/test-mode Stripe
+  (pack safety line) — the Stripe webhook destination still needs
+  `charge.dispute.closed` added to its subscribed event list before Stripe
+  will ever deliver this event to any adopter, same caveat #147 logged.
+- **Still open:** `our-family-lizard` has no webhook at all and checks
+  refunds live via `sessionWasFullyRefunded()`, which also only reads
+  `charge.refunded` and misses disputes — same failure mode, different
+  shape, out of scope for this repo. Filed as a Meseeks follow-up for
+  Revenue Rail's next visit there.
+
 ### R3 — Partial refund revokes full Pro access — **Medium** — CLOSED 2026-09-04
 - **Was:** `api/stripe-webhook.ts`'s `charge.refunded` case called
   `revokeByPaymentIntent` unconditionally. `charge.refunded` fires on
@@ -75,6 +107,8 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
   chargeback half ([#147](https://github.com/browningtons/debt-snowball-ant/pull/147),
   `charge.dispute.closed` revokes Pro) — filed to Meseeks as a follow-up so
   appkit (the reference kit) and `our-family-lizard` get the same coverage.
+  **appkit's half closed 2026-09-06 as R9 (above); `our-family-lizard` still
+  open.**
 
 ### R8 — `npm ci` failed on `main`, and nothing audited dependencies at all — **Medium** — CLOSED 2026-08-02
 - **Was:** two gaps in the same seam, found on Launch Shield's first visit.

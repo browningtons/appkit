@@ -9,7 +9,8 @@
 //   1. Run the migration in supabase/migrations/ against your project.
 //   2. Stripe Dashboard → Developers → Webhooks → add endpoint:
 //        https://<your-app>/api/stripe-webhook
-//      Subscribe to: checkout.session.completed, charge.refunded
+//      Subscribe to: checkout.session.completed, charge.refunded,
+//        charge.dispute.closed
 //   3. Copy the signing secret into STRIPE_WEBHOOK_SECRET (Vercel env).
 //
 // Local testing:
@@ -29,6 +30,7 @@ import Stripe from 'stripe';
 import {
   entitlementFromSession,
   isFullRefund,
+  paymentIntentIdFromCharge,
   recordEntitlement,
   revokeByPaymentIntent,
   serverModeEnabled,
@@ -123,10 +125,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // charge.refunded fires on partial refunds too — a $1 partial
         // refund on a $50 purchase must not revoke the whole entitlement.
         if (!isFullRefund(charge)) break;
-        const pi =
-          typeof charge.payment_intent === 'string'
-            ? charge.payment_intent
-            : (charge.payment_intent?.id ?? null);
+        const pi = paymentIntentIdFromCharge(charge);
+        if (pi) await revokeByPaymentIntent(pi);
+        break;
+      }
+      case 'charge.dispute.closed': {
+        const dispute = event.data.object;
+        // Only a lost dispute means Stripe definitively pulled the funds
+        // back — 'won' and the warning_* statuses leave the charge intact,
+        // so there is nothing to revoke. A lost dispute is the same
+        // buyer-keeps-the-product-and-the-money failure mode as
+        // charge.refunded, just initiated by the cardholder's bank instead
+        // of a manual refund — without this case it never reaches
+        // revokeByPaymentIntent, so Pro stays granted forever.
+        if (dispute.status !== 'lost') break;
+        // Dispute events carry `charge` as a bare id, not expanded, so it
+        // has to be fetched before payment_intent is readable.
+        const charge =
+          typeof dispute.charge === 'string'
+            ? await stripe.charges.retrieve(dispute.charge)
+            : dispute.charge;
+        const pi = paymentIntentIdFromCharge(charge);
         if (pi) await revokeByPaymentIntent(pi);
         break;
       }

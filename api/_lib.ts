@@ -213,6 +213,19 @@ export function isFullRefund(
   return charge.refunded === true && charge.amount_refunded >= charge.amount;
 }
 
+/**
+ * Read a charge's payment intent id, whichever form Stripe sent it in — a
+ * bare id string on most events, an expanded object when the API call that
+ * produced it asked for one.
+ */
+export function paymentIntentIdFromCharge(
+  charge: Pick<Stripe.Charge, 'payment_intent'>,
+): string | null {
+  return typeof charge.payment_intent === 'string'
+    ? charge.payment_intent
+    : (charge.payment_intent?.id ?? null);
+}
+
 /** Flip any entitlement(s) for a payment intent to refunded. */
 export async function revokeByPaymentIntent(
   paymentIntentId: string,
