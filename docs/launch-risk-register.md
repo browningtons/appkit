@@ -10,22 +10,6 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
 
 ## Active
 
-### R2 — Client-mode restore is not refund-aware — **Medium**
-- **Where:** `api/verify-purchase.ts` POST, Stripe-scan branches (lines ~121–166).
-- **Failure:** In client mode (no Supabase), restore-by-email matches any session
-  with `payment_status === 'paid'` and a matching line item — it never checks
-  whether the underlying charge was later refunded. A refunded buyer can restore
-  Pro indefinitely. Server mode is safe (the `refunded` row status handles it);
-  client mode is the exposed surface. `debt-snowball-dolphin` shipped a
-  near-identical "canceled subscriber could restore Pro" fix (pack ledger 2026-05-27).
-- **Fix (proposed):** when a matching paid session is found in client mode, check
-  the charge/refund state (`payment_intent` → latest charge `refunded` /
-  `amount_refunded`) before granting, or document client mode as
-  "no refund revocation — use server mode for refund-aware restore" in `ADOPTING.md`.
-- **Proof available today:** partial — pure helper is testable; full path needs a
-  Stripe test-mode fixture.
-
-
 ### R4 — Restore rate limiter is in-memory only — **Low**
 - **Where:** `api/verify-purchase.ts` `rateBuckets` (module-level `Map`).
 - **Failure:** Already documented in code as best-effort: it does not survive cold
@@ -45,8 +29,10 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
   trust line is the one field that reads as production-ready, so it is the one
   most likely to ship unedited — and it is a **binding public promise about
   refunds**, made on behalf of an adopter who never chose it. It also sits
-  slightly ahead of what the kit does: R2 (client-mode restore is not
-  refund-aware) and R3 (a partial refund revokes full access) are both open.
+  slightly ahead of what the kit does: R2 and R3 (both since closed) show the
+  fine print underneath a plain "30-day refund" promise is easy to get wrong,
+  which is exactly why an adopter should have to write this copy on purpose
+  rather than inherit it silently.
 - **Fix (proposed):** make it obviously a placeholder, consistent with its
   neighbours — e.g. `'REPLACE_ME: your refund and billing promise'` — so an
   adopter has to make the claim deliberately.
@@ -86,6 +72,30 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
   `charge.refunded` and misses disputes — same failure mode, different
   shape, out of scope for this repo. Filed as a Meseeks follow-up for
   Revenue Rail's next visit there.
+
+### R2 — Client-mode restore is not refund-aware — **Medium** — CLOSED 2026-09-13
+- **Was:** `api/verify-purchase.ts` POST, Stripe-scan branches. In client mode
+  (no Supabase), restore-by-email matched any settled session with a matching
+  line item — it never checked whether the underlying charge was later
+  refunded, so a refunded buyer could restore Pro indefinitely. Server mode
+  was already safe (the `refunded` row status handles it); client mode was
+  the exposed surface.
+- **Fixed:** both Stripe-scan branches (the Customer-search fast path and the
+  guest-checkout fallback scan) now expand `payment_intent.latest_charge` and
+  reject a hit when the new `sessionRefundedInFull(session)` helper (`_lib.ts`)
+  says the charge was refunded in full — reusing the same `isFullRefund()`
+  semantics R3/R9 already established (full refund only; a partial refund
+  still restores).
+- **Verified:** 6 new tests in `api/_lib.test.ts` for `sessionRefundedInFull`
+  (no payment_intent, un-expanded payment_intent/charge, unrefunded, partial
+  refund, full refund). `npm run verify` green — lint, 72/72 tests, build, 0
+  audit findings. Not verified against live/test-mode Stripe (pack safety
+  line).
+- **Left open deliberately:** this only checks *refund* status, not dispute
+  status (a lost chargeback), mirroring R2's original scope — a client-mode
+  equivalent of R9. `our-family-lizard`'s live refund check has the identical
+  gap (Meseeks `d74f9104`, 2026-09-02, still open) and should get both fixes
+  in the same visit.
 
 ### R3 — Partial refund revokes full Pro access — **Medium** — CLOSED 2026-09-04
 - **Was:** `api/stripe-webhook.ts`'s `charge.refunded` case called

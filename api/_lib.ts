@@ -226,6 +226,26 @@ export function paymentIntentIdFromCharge(
     : (charge.payment_intent?.id ?? null);
 }
 
+/**
+ * True when a Checkout Session's underlying charge has been refunded in full.
+ *
+ * False whenever there's no expanded charge to check — a `no_payment_required`
+ * (100%-off promo) session never had one, and a caller that forgot to expand
+ * `payment_intent.latest_charge` gets "not refunded" rather than a crash. This
+ * is R2's fix: client-mode restore (`verify-purchase.ts` POST) scans Stripe
+ * directly instead of reading the `entitlements` table, so unlike server mode
+ * it never saw a refund unless it checks the charge itself.
+ */
+export function sessionRefundedInFull(
+  session: Pick<Stripe.Checkout.Session, 'payment_intent'>,
+): boolean {
+  const pi = session.payment_intent;
+  if (!pi || typeof pi === 'string') return false;
+  const charge = pi.latest_charge;
+  if (!charge || typeof charge === 'string') return false;
+  return isFullRefund(charge);
+}
+
 /** Flip any entitlement(s) for a payment intent to refunded. */
 export async function revokeByPaymentIntent(
   paymentIntentId: string,

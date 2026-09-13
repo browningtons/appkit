@@ -19,18 +19,13 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   `our-family-lizard` and `debt-snowball-dolphin` for the same `=== 'paid'` literal.
 - Highest-value first mission item — do this before anything else.
 
-### A3 — Make client-mode restore refund-aware (or document the gap) — **score 8**
-- Impact 4, Confidence 3, Risk Reduction 3, Effort −2.
-- Closes **R2 (Medium)**. Either check refund state on the matched paid session
-  before granting in client mode, or explicitly document in `ADOPTING.md` that
-  refund revocation requires server mode. Prefer the doc + a smaller code guard.
-
 ### A7 — Make the shipped `trustLine` an obvious placeholder — **score 6**
 - Impact 2, Confidence 5, Risk Reduction 1, Effort −2.
 - Closes **R7 (Low)**. `kit.config.example.ts` ships *"30-day refund, no
   questions asked"* as finished-looking copy while every neighbouring field
   shouts `REPLACE_ME`. It is a binding refund promise made on an adopter's
-  behalf, and it runs slightly ahead of what the kit does (R2/R3 open).
+  behalf, made on the basis of R2/R3-shaped fine print an adopter never sees
+  (both since closed).
 
 ### ~~A8~~ CLOSED 2026-08-25 — flipped by hand with `workflow` scope (see Completed)
 - Impact 3, Confidence 4, Risk Reduction 3, Effort −4.
@@ -50,6 +45,25 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   just apply it.
 
 ## Completed
+
+### A3 — Make client-mode restore refund-aware — 2026-09-13
+*(Revenue Rail)*
+
+Closes **R2 (Medium)**. `verify-purchase.ts` POST's Stripe-scan restore
+branches (client mode — no Supabase) matched any settled session with a
+matching line item and never checked whether the underlying charge was later
+refunded, so a refunded buyer could restore Pro indefinitely; server mode was
+already safe (the `refunded` row status handles it). Both scan branches (the
+Customer-search fast path and the guest-checkout fallback) now expand
+`payment_intent.latest_charge` and reject a hit via a new
+`sessionRefundedInFull(session)` helper in `api/_lib.ts`, reusing the same
+`isFullRefund()` full-refund-only semantics R3/R9 already established (a
+partial refund still restores). 6 new tests in `api/_lib.test.ts`. `npm run
+verify` green (lint, 72/72 tests, build, 0 audit findings). Not verified
+against live/test Stripe (pack safety line). Dispute/chargeback status is out
+of scope here (same original-scope boundary R2 always had) — `our-family-lizard`
+has the identical live-refund-check gap plus the still-open dispute gap
+(Meseeks `d74f9104`, 2026-09-02) and should get both in the same visit.
 
 ### A10 — Revoke Pro on a lost chargeback — 2026-09-06
 *(Revenue Rail)*

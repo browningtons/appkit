@@ -5,6 +5,7 @@ import {
   sessionIsSettled,
   isFullRefund,
   paymentIntentIdFromCharge,
+  sessionRefundedInFull,
   serverModeEnabled,
   serverModePartiallyConfigured,
 } from './_lib';
@@ -130,6 +131,61 @@ describe('paymentIntentIdFromCharge', () => {
         typeof paymentIntentIdFromCharge
       >[0]),
     ).toBeNull();
+  });
+});
+
+describe('sessionRefundedInFull', () => {
+  // R2: client-mode restore (verify-purchase.ts POST) scans Stripe directly
+  // instead of reading the entitlements table, so unlike server mode it never
+  // saw a refund unless it checks the underlying charge itself.
+  it('is FALSE when there is no payment_intent at all (e.g. a $0 promo session)', () => {
+    expect(
+      sessionRefundedInFull({ payment_intent: null } as Parameters<
+        typeof sessionRefundedInFull
+      >[0]),
+    ).toBe(false);
+  });
+
+  it('is FALSE when payment_intent was not expanded (bare id string)', () => {
+    expect(
+      sessionRefundedInFull({ payment_intent: 'pi_123' } as Parameters<
+        typeof sessionRefundedInFull
+      >[0]),
+    ).toBe(false);
+  });
+
+  it('is FALSE when latest_charge was not expanded (bare id string)', () => {
+    expect(
+      sessionRefundedInFull({
+        payment_intent: { latest_charge: 'ch_123' },
+      } as Parameters<typeof sessionRefundedInFull>[0]),
+    ).toBe(false);
+  });
+
+  it('is FALSE for an unrefunded charge', () => {
+    expect(
+      sessionRefundedInFull({
+        payment_intent: { latest_charge: charge() },
+      } as Parameters<typeof sessionRefundedInFull>[0]),
+    ).toBe(false);
+  });
+
+  it('is FALSE for a partial refund — a refunded buyer of $1-of-$50 can still restore', () => {
+    expect(
+      sessionRefundedInFull({
+        payment_intent: { latest_charge: charge({ amount_refunded: 100 }) },
+      } as Parameters<typeof sessionRefundedInFull>[0]),
+    ).toBe(false);
+  });
+
+  it('is TRUE for a fully refunded charge — restore must not resurrect Pro', () => {
+    expect(
+      sessionRefundedInFull({
+        payment_intent: {
+          latest_charge: charge({ refunded: true, amount_refunded: 5000 }),
+        },
+      } as Parameters<typeof sessionRefundedInFull>[0]),
+    ).toBe(true);
   });
 });
 
