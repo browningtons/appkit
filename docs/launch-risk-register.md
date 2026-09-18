@@ -49,6 +49,9 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
   trust line is the one field that reads as production-ready, so it is the one
   most likely to ship unedited — and it is a **binding public promise about
   refunds**, made on behalf of an adopter who never chose it. It also sits
+  slightly ahead of what the kit does: R2 (client-mode restore is not
+  refund-aware) and R3 (a partial refund revokes full access) are both open.
+
   slightly ahead of what the kit does: R2 and R3 (both since closed) show the
   fine print underneath a plain "30-day refund" promise is easy to get wrong,
   which is exactly why an adopter should have to write this copy on purpose
@@ -58,6 +61,15 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
   adopter has to make the claim deliberately.
 - **Proof available today:** yes — read the file; compare against the
   `REPLACE_ME` convention two fields above.
+- **Addendum 2026-09-04 (Launch Shield):** the copy fix above is Trust
+  Ledger's (in flight, PR #16). Landed the other half here, ahead of that
+  PR: `setKitConfig` (`src/kit/config.ts`) now `console.error`s if
+  `upgrade.trustLine` still equals a shipped placeholder — checked against
+  both the current `main` prose and #16's `REPLACE_ME:` variant, so it's
+  correct however the two land. Runs at kit-init in every adopter
+  regardless of that adopter's own build tooling. See `agent-backlog.md`'s
+  Completed section.
+
 
 ## Closed
 
