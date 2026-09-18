@@ -24,6 +24,7 @@ import {
   recordEntitlement,
   emailHasActiveEntitlement,
   sessionIsSettled,
+  sessionRefundedInFull,
 } from './_lib';
 
 // ---------------------------------------------------------------------------
@@ -127,12 +128,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const sessions = await stripe.checkout.sessions.list({
           customer: cust.id,
           limit: 100,
-          expand: ['data.line_items'],
+          expand: ['data.line_items', 'data.payment_intent.latest_charge'],
         });
         const hit = sessions.data.find(
           (s) =>
             sessionIsSettled(s.payment_status) &&
-            lineItemMatchesPro(s.line_items, priceId, productId),
+            lineItemMatchesPro(s.line_items, priceId, productId) &&
+            !sessionRefundedInFull(s),
         );
         if (hit) return res.status(200).json({ verified: true });
       }
@@ -155,11 +157,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         );
         if (hit) {
           const full = await stripe.checkout.sessions.retrieve(hit.id, {
-            expand: ['line_items'],
+            expand: ['line_items', 'payment_intent.latest_charge'],
           });
-          return res
-            .status(200)
-            .json({ verified: lineItemMatchesPro(full.line_items, priceId, productId) });
+          const verified =
+            lineItemMatchesPro(full.line_items, priceId, productId) &&
+            !sessionRefundedInFull(full);
+          return res.status(200).json({ verified });
         }
         if (!batch.has_more) break;
         startingAfter = batch.data[batch.data.length - 1]?.id;
