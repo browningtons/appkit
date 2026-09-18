@@ -19,6 +19,20 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   `our-family-lizard` and `debt-snowball-dolphin` for the same `=== 'paid'` literal.
 - Highest-value first mission item — do this before anything else.
 
+### A2 — Don't revoke Pro on a partial refund — **score 10**
+- Impact 4, Confidence 4, Risk Reduction 4, Effort −2.
+- Closes **R3 (Medium)**. Extract `isFullRefund(charge)` (compare
+  `amount_refunded` to `amount`), only `revokeByPaymentIntent` when full. Unit-test
+  full-vs-partial. Consider `charge.dispute.created`.
+
+### A3 — Make client-mode restore refund-aware (or document the gap) — **score 8**
+- Impact 4, Confidence 3, Risk Reduction 3, Effort −2.
+- Closes **R2 (Medium)**. Either check refund state on the matched paid session
+  before granting in client mode, or explicitly document in `ADOPTING.md` that
+  refund revocation requires server mode. Prefer the doc + a smaller code guard.
+
+### ~~A7~~ CLOSED 2026-09-04 — obvious placeholder shipped (see Completed)
+
 ### A7 — Make the shipped `trustLine` an obvious placeholder — **score 6**
 - Impact 2, Confidence 5, Risk Reduction 1, Effort −2.
 - Closes **R7 (Low)**. `kit.config.example.ts` ships *"30-day refund, no
@@ -45,6 +59,26 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   just apply it.
 
 ## Completed
+
+### A7 — Make the shipped `trustLine` an obvious placeholder — 2026-09-04
+*(Trust Ledger; closes R7)*
+
+`kit.config.example.ts` → `upgrade.trustLine` shipped *"Secure payment via
+Stripe. 30-day refund, no questions asked. No account. No recurring
+charges."* as finished-looking copy while every neighbouring field shouted
+`REPLACE_ME` — a binding refund promise an adopter never chose, running
+ahead of what the kit does (R2/R3 both still open). Now reads
+`'REPLACE_ME: your refund and billing promise (e.g. ...)'`, matching the
+`pk_live_REPLACE_ME` convention, plus a comment pointing at R2/R3 so an
+adopter who does fill it in knows "no questions asked" isn't true yet.
+`npm run lint` / `npm run build` verified green.
+
+**Left the stronger fix for Launch Shield, `[→ launch-shield]`.** This
+file's own "supporting bet" on A7 scoped a build-time or kit-init check
+that fails/warns if `trustLine` still equals the shipped string —
+brittle-but-loud beats silent-but-flexible for a legal string, and it's a
+code-behavior guard rather than a copy fix. Filed rather than built here to
+keep this change to the one thing it's for.
 
 ### A3 — Make client-mode restore refund-aware — 2026-09-13
 *(Revenue Rail)*
