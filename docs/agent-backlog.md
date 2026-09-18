@@ -31,12 +31,7 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   before granting in client mode, or explicitly document in `ADOPTING.md` that
   refund revocation requires server mode. Prefer the doc + a smaller code guard.
 
-### A7 — Make the shipped `trustLine` an obvious placeholder — **score 6**
-- Impact 2, Confidence 5, Risk Reduction 1, Effort −2.
-- Closes **R7 (Low)**. `kit.config.example.ts` ships *"30-day refund, no
-  questions asked"* as finished-looking copy while every neighbouring field
-  shouts `REPLACE_ME`. It is a binding refund promise made on an adopter's
-  behalf, and it runs slightly ahead of what the kit does (R2/R3 open).
+### ~~A7~~ CLOSED 2026-09-04 — obvious placeholder shipped (see Completed)
 
 ### ~~A8~~ CLOSED 2026-08-25 — flipped by hand with `workflow` scope (see Completed)
 - Impact 3, Confidence 4, Risk Reduction 3, Effort −4.
@@ -56,6 +51,26 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   just apply it.
 
 ## Completed
+
+### A7 — Make the shipped `trustLine` an obvious placeholder — 2026-09-04
+*(Trust Ledger; closes R7)*
+
+`kit.config.example.ts` → `upgrade.trustLine` shipped *"Secure payment via
+Stripe. 30-day refund, no questions asked. No account. No recurring
+charges."* as finished-looking copy while every neighbouring field shouted
+`REPLACE_ME` — a binding refund promise an adopter never chose, running
+ahead of what the kit does (R2/R3 both still open). Now reads
+`'REPLACE_ME: your refund and billing promise (e.g. ...)'`, matching the
+`pk_live_REPLACE_ME` convention, plus a comment pointing at R2/R3 so an
+adopter who does fill it in knows "no questions asked" isn't true yet.
+`npm run lint` / `npm run build` verified green.
+
+**Left the stronger fix for Launch Shield, `[→ launch-shield]`.** This
+file's own "supporting bet" on A7 scoped a build-time or kit-init check
+that fails/warns if `trustLine` still equals the shipped string —
+brittle-but-loud beats silent-but-flexible for a legal string, and it's a
+code-behavior guard rather than a copy fix. Filed rather than built here to
+keep this change to the one thing it's for.
 
 ### A8 CI flips to `npm ci` — 2026-08-25
 *(Applied by hand exactly as the A8 entry asked — no re-diagnosis.)*
