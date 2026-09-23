@@ -288,21 +288,7 @@ whole-lock regen). **Blast-radius follow-up:** file Meseeks checks that
 `our-family-lizard` and `debt-snowball-ant` match this kit shape (they should —
 this was ported *from* their fixes).
 
-### A8 — Promote the purchase-celebration banner from demo to a shared kit component — **score 6**
-- Impact 3, Confidence 4, Risk Reduction 1, Effort −2.
-- Found 2026-08-13 by **User Journey** while fixing the demo (see A9 below —
-  Completed). `our-family-lizard` and `debt-snowball-dolphin` each hand-built
-  their own post-purchase confirmation banner around the same
-  `justPurchased`/`dismissJustPurchased` hook state, independently, because the
-  kit never shipped one. The demo fix proves the pattern but still leaves every
-  *new* adopter to build their own copy from scratch, same as the two existing
-  ones did.
-- **Fix (proposed):** extract a small `<PurchaseConfirmation>` (or similarly
-  named) component under `src/kit/components/`, export it from `src/kit/index.ts`
-  alongside `UpgradeModal`/`LockedOverlay`/`ProBadge`/`AdminBar`, and swap the demo
-  to use it. Not done in the same change as A9 — new shared component +
-  export-surface change is a larger, separate unit of work than wiring existing
-  state into the existing demo.
+### ~~A8~~ CLOSED 2026-09-23 — promoted to a shared kit component (see Completed)
 
 ### A5 — Add an `npm run verify` alias + dependency-audit CI step — **score 7**
 - Impact 3, Confidence 4, Risk Reduction 2, Effort −2.
@@ -311,6 +297,28 @@ this was ported *from* their fixes).
   and an audit step (watch the recurring **dompurify** CVE the pack has hit 3×).
 
 ## Completed
+
+### A8 — Promote the purchase-celebration banner from demo to a shared kit component — 2026-09-23
+*(User Journey; closes the gap A9 (2026-08-13) left open)*
+
+A9 wired `justPurchased`/`dismissJustPurchased` into the celebration banner,
+but only inside `src/App.tsx` — the one file this repo's own top-of-file
+comment tells every real adopter to "replace entirely," leaving `src/kit/`
+alone. That meant A9's fix never reached a real adopter: anyone following the
+documented convention deletes the banner along with the rest of the demo and
+is back to A9's original bug, silently.
+
+Extracted the banner as-is into `src/kit/components/PurchaseConfirmation.tsx`
+(reads `app.name` via `useKitConfig()`, takes `onDismiss`, same pattern as
+`LockedOverlay`), exported it from `src/kit/index.ts` alongside
+`UpgradeModal`/`LockedOverlay`/`ProBadge`/`AdminBar`, and swapped the demo to
+`<PurchaseConfirmation onDismiss={auth.dismissJustPurchased} />`. No behavior
+change — same markup, same copy, same trigger — only which file owns it.
+
+**Verified:** `npm run verify` green (lint clean, 76/76 tests, build, 0
+production vulnerabilities) and `npm run build:lib` — `dist/index.js` /
+`dist/index.d.ts` both now export `PurchaseConfirmation`, confirmed by grep
+against the built output, not assumed from the source export line.
 
 ### A9 — Render the post-purchase celebration in the reference demo — 2026-08-13
 *(User Journey; [PR #10](https://github.com/browningtons/appkit/pull/10))*
