@@ -298,6 +298,33 @@ this was ported *from* their fixes).
 
 ## Completed
 
+### A11 — `handleRestore` silently did nothing on a mistyped email — 2026-09-25
+*(User Journey)*
+
+`useAuth.ts#handleRestore` (`api`-backed restore-by-email, shipped to every
+adopter, not just the demo) collected the email via `window.prompt()` and
+`return`ed with zero feedback whenever the text didn't contain `@` — the only
+branch in the function that showed nothing, while success, no-match, and
+network-error all call `alert()`. A first-time buyer restoring on a new
+device who fat-fingered the address on their Stripe receipt saw "Restore" do
+nothing and had no way to know it was their typo rather than a real
+"no purchase found" — the double dead-end this pack's found before elsewhere
+(a tap that produces no visible result is indistinguishable from broken).
+
+Split the three prompt outcomes explicitly: cancel (`null`) and a blank
+submission stay silent (expected — no result nagging on cancel), but a
+non-empty value without `@` now `alert()`s "That doesn't look like an email
+address..." before ever reaching the network, matching the tone of the other
+three outcomes already in this function. No behavior change to the two
+existing feedback paths.
+
+**Verified:** 4 new tests in `src/kit/auth/useAuth.restore.test.tsx`
+(no-`@`-alerts-and-skips-fetch, cancel-stays-silent, blank-stays-silent,
+valid-trimmed-email-still-restores) — `handleRestore` had no prior test
+coverage at all. `npm run verify` green (lint clean, 80/80 tests, build, 0
+production vulnerabilities); `npm run build:lib` unaffected (no export
+surface change).
+
 ### A8 — Promote the purchase-celebration banner from demo to a shared kit component — 2026-09-23
 *(User Journey; closes the gap A9 (2026-08-13) left open)*
 
