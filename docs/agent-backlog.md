@@ -58,6 +58,19 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   lockfile. Filed to Meseeks as a permissions follow-up; don't re-diagnose,
   just apply it.
 
+### A12 — `UpgradeModal`'s close button and restore link are under the mobile tap-target minimum — **score 4**
+- Impact 2, Confidence 4, Risk Reduction 1, Effort −3.
+- Noted by User Journey 2026-09-25 while fixing A11 in the same file's sibling
+  component; not fixed here to keep that change to the one thing it was for.
+  `UpgradeModal.tsx`'s close button is `w-8 h-8` (32px) and the "Already
+  purchased? Restore" link is `text-[11px]` with no padding — both below the
+  ~44px minimum tap target Apple/Google guidance recommends, on a modal
+  rendered `items-end` (bottom sheet) on mobile by default. Neither is
+  provably broken (both still register a tap), so this is a friction note,
+  not a confirmed dead-end — bump the close button's hit area (e.g. padding
+  or a larger invisible tap zone) and give the restore link real padding
+  before removing this line.
+
 ## Completed
 
 ### A7 — Make the shipped `trustLine` an obvious placeholder — 2026-09-04
