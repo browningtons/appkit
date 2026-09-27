@@ -17,7 +17,7 @@ Extracted from [Our Family Lizard](https://ourfamilylizard.com). The patterns ar
 - **`<AdminBar>`** — admin top bar with view-as-user toggle (5-tap on logo to enter admin)
 - **`useAuth()`** — entitlement + admin state, URL-based unlock activation, `requirePro(action, source)` wrapper, manual restore-by-email flow, and a throttled boot re-verify that revokes Pro on refund (fails open on network/rate-limit errors)
 - **`api/verify-purchase.ts`** — Vercel serverless route that verifies Stripe Checkout sessions and email-based restores. The restore path is IP rate-limited and uses Stripe Customer search (with a recent-session scan as fallback)
-- **`api/stripe-webhook.ts`** — optional Stripe webhook for durable server-side entitlement (grant on `checkout.session.completed`, revoke on `charge.refunded`). No-op until you set the Supabase env vars — see below
+- **`api/stripe-webhook.ts`** — optional Stripe webhook for durable server-side entitlement (grant on `checkout.session.completed`, revoke on a full `charge.refunded` or a lost `charge.dispute.closed`). No-op until you set the Supabase env vars — see below
 - **Analytics layer** — UTM capture, Stripe `client_reference_id` decoration, named funnel events on Vercel Analytics
 
 ## Per-app contract: `kit.config.ts`
@@ -62,7 +62,9 @@ When set:
 - `api/stripe-webhook.ts` records every paid Checkout Session in the
   `entitlements` table — so a buyer who closes the tab before redirect still
   gets access.
-- Refunds (`charge.refunded`) flip the row to `refunded`, revoking access. A
+- A full refund (`charge.refunded`, amount refunded ≥ amount charged) or a
+  lost dispute (`charge.dispute.closed` with `status: 'lost'`) flips the row
+  to `refunded`, revoking access. A partial refund leaves access intact. A
   device that already unlocked Pro picks this up on its next open: `useAuth`
   runs a throttled (24h) boot re-verify against `/api/verify-purchase` and
   revokes locally on an affirmative not-entitled answer — failing open on a
@@ -74,8 +76,11 @@ Setup:
 1. Run `supabase/migrations/0001_entitlements.sql` against your project
    (`supabase db push` or the SQL editor).
 2. Add a Stripe webhook endpoint pointing at `https://<app>/api/stripe-webhook`,
-   subscribed to `checkout.session.completed` and `charge.refunded`. Copy its
-   signing secret into `STRIPE_WEBHOOK_SECRET`.
+   subscribed to `checkout.session.completed`, `charge.refunded`, and
+   `charge.dispute.closed` (a lost dispute revokes access the same as a
+   refund — Stripe never delivers this event unless it's subscribed here,
+   even though the handler code supports it). Copy its signing secret into
+   `STRIPE_WEBHOOK_SECRET`.
 3. Deploy. Verify locally with
    `stripe listen --forward-to localhost:3000/api/stripe-webhook`.
 

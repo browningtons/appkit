@@ -129,8 +129,11 @@ wear that prefix.
    ```
 
 2. In Stripe → Webhooks, add `https://<your-app>/api/stripe-webhook`,
-   subscribed to `checkout.session.completed` and `charge.refunded`. Put the
-   signing secret in `STRIPE_WEBHOOK_SECRET`.
+   subscribed to `checkout.session.completed`, `charge.refunded`, and
+   `charge.dispute.closed`. The last one is easy to skip: the handler already
+   revokes on a lost dispute, but Stripe will never send the event unless the
+   endpoint is subscribed to it, so a buyer who wins a chargeback keeps Pro
+   forever until you add it. Put the signing secret in `STRIPE_WEBHOOK_SECRET`.
 
 3. Smoke-test before launch:
 
