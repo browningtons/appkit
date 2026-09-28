@@ -244,12 +244,18 @@ export function useAuth() {
 
   const handleRestore = useCallback(async () => {
     const email = prompt('Enter the email address you used at checkout:');
-    if (!email || !email.trim().includes('@')) return;
+    if (email === null) return; // cancelled
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) return; // submitted blank — treat like cancel
+    if (!trimmedEmail.includes('@')) {
+      alert("That doesn't look like an email address. Enter the address from your Stripe receipt.");
+      return;
+    }
     try {
       const resp = await fetch('/api/verify-purchase', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: trimmedEmail }),
       });
       const data = (await resp.json()) as { verified?: boolean };
       if (data.verified) {
@@ -258,7 +264,7 @@ export function useAuth() {
         // Keep the email as the handle so the boot re-verify can revoke this
         // device if the purchase is later refunded, and seed the throttle so
         // the next boot doesn't immediately re-POST.
-        save(RESTORE_EMAIL_KEY, email.trim());
+        save(RESTORE_EMAIL_KEY, trimmedEmail);
         save(LAST_VERIFIED_KEY, Date.now());
         setUpgradeSource(null);
         trackRestoreAttempt(true);
