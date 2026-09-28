@@ -9,27 +9,11 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
 
 ## Active
 
-### A1 — Unlock Pro on promo / $0 (`no_payment_required`) checkout — **score 13**
-- Impact 5, Confidence 4, Risk Reduction 5, Effort −1.
-- Closes **R1 (High)**. Accept `payment_status in ('paid','no_payment_required')`
-  in `entitlementFromSession` (`api/_lib.ts`) and the GET path in
-  `api/verify-purchase.ts`. Add a `no_payment_required` fixture to
-  `api/_lib.test.ts`. Pure change, provable without live money.
-- **Reference-repo blast radius:** after fixing, file Meseeks follow-ups to check
-  `our-family-lizard` and `debt-snowball-dolphin` for the same `=== 'paid'` literal.
-- Highest-value first mission item — do this before anything else.
+### ~~A1~~ CLOSED 2026-07-24 — promo/$0 checkout now unlocks Pro (see Completed)
 
-### A2 — Don't revoke Pro on a partial refund — **score 10**
-- Impact 4, Confidence 4, Risk Reduction 4, Effort −2.
-- Closes **R3 (Medium)**. Extract `isFullRefund(charge)` (compare
-  `amount_refunded` to `amount`), only `revokeByPaymentIntent` when full. Unit-test
-  full-vs-partial. Consider `charge.dispute.created`.
+### ~~A2~~ CLOSED 2026-09-04 — partial refund no longer revokes Pro (see Completed)
 
-### A3 — Make client-mode restore refund-aware (or document the gap) — **score 8**
-- Impact 4, Confidence 3, Risk Reduction 3, Effort −2.
-- Closes **R2 (Medium)**. Either check refund state on the matched paid session
-  before granting in client mode, or explicitly document in `ADOPTING.md` that
-  refund revocation requires server mode. Prefer the doc + a smaller code guard.
+### ~~A3~~ CLOSED 2026-09-13 — client-mode restore is now refund-aware (see Completed)
 
 ### ~~A7~~ CLOSED 2026-09-04 — obvious placeholder shipped (see Completed)
 
@@ -72,6 +56,25 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   before removing this line.
 
 ## Completed
+
+### A1 — Unlock Pro on promo / $0 (`no_payment_required`) checkout — 2026-07-24
+*(Revenue Rail; [PR #4](https://github.com/browningtons/appkit/pull/4))*
+
+Closes **R1 (High)**. Stripe returns `payment_status: 'no_payment_required'`
+(not `'paid'`) for a $0 total — a 100%-off coupon or a free/intro price — and
+four gates rejected such a session, so a legitimate promo buyer completed
+checkout and got no Pro access. New shared `sessionIsSettled(status)` helper
+in `api/_lib.ts` (`'paid' || 'no_payment_required'`), substituted at all four
+gates (`entitlementFromSession`, the GET confirmation, and both POST restore
+branches). Refund revocation deliberately untouched — a settled $0 session is
+entitled, a refunded one is still revoked. 2 new tests in `api/_lib.test.ts`;
+suite green (48/48, `tsc -b` clean). Ported from
+[our-family-lizard#25](https://github.com/browningtons/our-family-lizard/pull/25);
+`debt-snowball-ant` audited same day and already clean. appkit was the last
+carrier, and as the reference kit would have shipped the bug to every future
+adopter. This entry was missing from this file entirely — [docs/launch-risk-register.md](launch-risk-register.md)
+had the closure (R1) but nothing here pointed at it, the same gap the A6
+reconciliation note below (2026-08-13) already flagged for a different item.
 
 ### A7 — Make the shipped `trustLine` an obvious placeholder — 2026-09-04
 *(Trust Ledger; closes R7)*
@@ -303,11 +306,7 @@ this was ported *from* their fixes).
 
 ### ~~A8~~ CLOSED 2026-09-23 — promoted to a shared kit component (see Completed)
 
-### A5 — Add an `npm run verify` alias + dependency-audit CI step — **score 7**
-- Impact 3, Confidence 4, Risk Reduction 2, Effort −2.
-- CI runs lint/test/build but there's no `verify` alias (the canonical loop assumes
-  one) and no `npm audit` gate. Add `"verify": "npm run lint && npm test && npm run build"`
-  and an audit step (watch the recurring **dompurify** CVE the pack has hit 3×).
+### ~~A5~~ CLOSED 2026-08-02 — `npm run verify` alias + dependency-audit gate already shipped (see Completed below; this was a stale duplicate of the same item, never removed when it closed)
 
 ## Completed
 
