@@ -49,9 +49,12 @@ export const KIT_CONFIG: KitConfig = {
       'Feature three',
     ],
     // This is a binding public promise about refunds — pick one your app can
-    // actually keep. Client-mode restore is not refund-aware (R2) and the
-    // webhook revokes full access on any partial refund (R3); don't promise
-    // "no questions asked" until those match reality.
+    // actually keep. A full Stripe refund revokes access in both modes (a
+    // partial refund does not); a lost dispute (chargeback) additionally
+    // revokes access in server mode only — client-mode restore does not
+    // check dispute status. Don't promise "no questions asked" unless your
+    // support flow can actually issue a Stripe refund inside the window you
+    // name here.
     trustLine:
       'REPLACE_ME: your refund and billing promise (e.g. "Secure payment via Stripe. 30-day refund. No account. No recurring charges.")',
   },
