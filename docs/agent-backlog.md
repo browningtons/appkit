@@ -15,15 +15,8 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
 
 ### ~~A3~~ CLOSED 2026-09-13 — client-mode restore is now refund-aware (see Completed)
 
-### ~~A7~~ CLOSED 2026-09-04 — obvious placeholder shipped (see Completed)
-
-### A7 — Make the shipped `trustLine` an obvious placeholder — **score 6**
-- Impact 2, Confidence 5, Risk Reduction 1, Effort −2.
-- Closes **R7 (Low)**. `kit.config.example.ts` ships *"30-day refund, no
-  questions asked"* as finished-looking copy while every neighbouring field
-  shouts `REPLACE_ME`. It is a binding refund promise made on an adopter's
-  behalf, made on the basis of R2/R3-shaped fine print an adopter never sees
-  (both since closed).
+### ~~A7~~ CLOSED 2026-09-04 — obvious placeholder shipped (see Completed; this
+was a stale duplicate of the same item, never removed when it closed)
 
 ### ~~A8~~ CLOSED 2026-08-25 — flipped by hand with `workflow` scope (see Completed)
 - Impact 3, Confidence 4, Risk Reduction 3, Effort −4.
@@ -56,6 +49,34 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
   before removing this line.
 
 ## Completed
+
+### A13 — Retry the dependency-audit gate against npm's classic-audit-endpoint 400s — 2026-09-30
+*(Launch Shield; ports [deseret-xeriscaping#42](https://github.com/browningtons/deseret-xeriscaping/pull/42))*
+
+npm's classic audit endpoint (`POST /-/npm/v1/security/audits/quick`) is in
+its retirement window and intermittently returns a bare `400` unrelated to
+any real finding — it took out `deseret-xeriscaping`'s and
+`debt-snowball-dolphin`'s scheduled `Dependency audit` runs two days running
+(2026-09-19, 2026-09-20), both times against a lockfile that audited clean
+moments later. appkit hasn't hit it yet (15 straight green scheduled runs
+through 09-29), but it calls the same endpoint on the same schedule, so it's
+one flaky day away from the same false red — and as the reference kit, a
+false-red audit gate here is a false-red gate every adopter inherits.
+`deseret-xeriscaping#42`'s own summary named appkit as one of the repos to
+opportunistically port this to.
+
+`scripts/audit-retry.mjs` wraps `npm audit --omit=dev --audit-level=low`
+(appkit's existing threshold, unchanged) with up to 3 attempts (5s/15s
+backoff); `audit:deps` now calls it instead of running the bare command. A
+real vulnerability is deterministic and fails every attempt, so retrying
+can't mask one — only transient registry errors resolve.
+
+**Verified:** `npm run audit:deps` — 0 vulnerabilities, exits 0 (happy path
+unaffected). Standalone always-fails harness — still exits 1 after 3
+attempts (a real finding still fails the gate). Standalone
+fails-once-then-succeeds harness — exits 0 on attempt 2 (recovers from a
+transient failure). `npm run verify` green end to end (lint, 80/80 tests,
+build, audit:deps).
 
 ### A1 — Unlock Pro on promo / $0 (`no_payment_required`) checkout — 2026-07-24
 *(Revenue Rail; [PR #4](https://github.com/browningtons/appkit/pull/4))*

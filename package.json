@@ -41,7 +41,7 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
-    "audit:deps": "npm audit --omit=dev --audit-level=low",
+    "audit:deps": "node scripts/audit-retry.mjs",
     "verify": "npm run lint && npm test && npm run build && npm run audit:deps"
   },
   "peerDependencies": {
