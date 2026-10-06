@@ -73,6 +73,49 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
 
 ## Closed
 
+### R10 — A failure line could log a buyer's Checkout Session id — **Medium** — CLOSED 2026-10-05 (pending merge)
+- **Was:** a Checkout Session id is a bearer credential in the kit: the
+  checkout redirect's `#session_id=cs_…` goes to `GET /api/verify-purchase`,
+  and a settled Pro session answers `{ verified: true }` on any device
+  (`src/kit/auth/useAuth.ts`). Every catch-all in `api/` handed the caught
+  error whole to `console.error`, which Vercel keeps: `verify-purchase.ts`
+  (`'verify-purchase error', err`) and `stripe-webhook.ts` (`'stripe-webhook
+  handler error', err`) printed Stripe's message, which quotes the id a call
+  failed on (`No such checkout.session: cs_live_…` — a key in the wrong mode
+  says it for a *real* buyer's session, and restore-by-email retrieves the
+  buyer's own sessions), plus `raw` and `headers`. Worse,
+  `'stripe-webhook signature verification failed', err` printed the SDK's
+  `StripeSignatureVerificationError`, whose `payload` is the whole event
+  body: after a rotated or mistyped `STRIPE_WEBHOOK_SECRET`, every paid
+  session's id and buyer email would land in the logs (reproduced against
+  stripe-node 22.1.0). The three `_lib.ts` database-error lines printed the
+  Supabase error, whose `details` can quote the refused row. Because this is
+  the reference kit, the same lines shipped to every adopter that re-exports
+  the handlers. Found by porting `our-family-lizard`'s R18 guard (Meseeks
+  `bc752ae3`).
+- **Fixed:** every line `api/` writes goes through `log` in `api/_log.ts`
+  (ported from `our-family-lizard`'s `api/_lib/log.ts`, with its #141
+  hardening): flat values only, any `cs_live_`/`cs_test_` id cut to
+  `cs_live_…[redacted]` in the event, every key and every text value. A caught
+  error is flattened first by `errorLogFields(err)` — Stripe's type, code,
+  status, param, request id and request-log link, the cause, a non-Stripe
+  error's stack — never `raw`, `headers`, `payload` or a database error's
+  `details`. `eslint.config.js` refuses `console.*` and
+  `process.stdout/stderr/emitWarning` anywhere else in `api/` (every JS/TS
+  extension, `noInlineConfig` so a disable comment doesn't work).
+- **Verified:** `api/_log.test.ts` (redaction, errorLogFields on real SDK
+  errors incl. a real signature failure, `log`), `api/logging-guard.test.ts`
+  (pins the lint rule), `api/session-id-logs.test.ts` (both routes failing on
+  a real-looking buyer's id: GET, POST restore, webhook bad signature, webhook
+  handler error — all four red against the pre-fix routes). `npm run verify`
+  green — lint, 127/127 tests, build, 0 audit findings; `npm run build:lib`
+  green.
+- **Residual:** Vercel's request log still receives `GET
+  /api/verify-purchase?session_id=…` itself (hosting, not a log line — the
+  same residual `our-family-lizard` R18 records). Adopters' *own* `api/`
+  routes are not covered by this repo's lint; `our-family-lizard` already has
+  the guard, `debt-snowball-ant` gets it in its own PR.
+
 ### R9 — A lost chargeback never revoked Pro — **Medium** — CLOSED 2026-09-06
 - **Was:** `api/stripe-webhook.ts` handled `charge.refunded` but had no case for
   `charge.dispute.closed` — the cardholder-initiated equivalent of a refund. A

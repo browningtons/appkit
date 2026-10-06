@@ -310,6 +310,29 @@ this was ported *from* their fixes).
 
 ## Completed
 
+### A13 — Keep Checkout Session ids out of Vercel logs — 2026-10-05
+*(interactive session, Meseeks `bc752ae3`)*
+
+Closes **R10 (Medium)**. Ported `our-family-lizard`'s redacting logger and
+lint guard (its R18 / A-LG1) into the reference kit. New `api/_log.ts`:
+`log.error/warn/info` take flat fields only and cut any `cs_live_`/`cs_test_`
+id out of the event, keys and text values; `errorLogFields(err)` flattens a
+caught error to Stripe's diagnosis without `raw`, `headers`, a signature
+error's `payload` or a database error's `details`. Routed all seven `api/`
+log sites through it (`verify-purchase.ts` catch-all; `stripe-webhook.ts`
+half-config, signature-failure and handler-error lines; the three `_lib.ts`
+Supabase error lines). `eslint.config.js` now refuses `console.*` and
+`process.stdout/stderr/emitWarning` in `api/` outside `_log.ts`, with
+`noInlineConfig`.
+
+**Verified:** 3 new test files (`api/_log.test.ts`,
+`api/logging-guard.test.ts`, `api/session-id-logs.test.ts`); the four
+route-level tests were red against the pre-fix routes. `npm run verify`
+green (lint clean, 127/127 tests, build, 0 production vulnerabilities);
+`npm run build:lib` green. Not verified against live/test-mode Stripe (pack
+safety line). **Follow-up:** adopters' own `api/` code needs the same guard —
+`our-family-lizard` has it; `debt-snowball-ant` gets it in its own PR.
+
 ### A11 — `handleRestore` silently did nothing on a mistyped email — 2026-09-25
 *(User Journey)*
 

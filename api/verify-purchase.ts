@@ -26,6 +26,7 @@ import {
   sessionIsSettled,
   sessionRefundedInFull,
 } from './_lib';
+import { errorLogFields, log } from './_log';
 
 // ---------------------------------------------------------------------------
 // Rate limiting.
@@ -172,7 +173,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(405).json({ error: 'method not allowed' });
   } catch (err) {
-    console.error('verify-purchase error', err);
+    log.error('verify-purchase error', errorLogFields(err));
     return res.status(500).json({ error: 'verification failed' });
   }
 }
