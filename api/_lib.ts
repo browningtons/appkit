@@ -24,6 +24,7 @@
 
 import Stripe from 'stripe';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { errorLogFields, log } from './_log';
 
 // ---------------------------------------------------------------------------
 // Stripe line-item matching
@@ -192,7 +193,7 @@ export async function recordEntitlement(row: EntitlementRow): Promise<boolean> {
       onConflict: 'stripe_session_id',
     });
   if (error) {
-    console.error('recordEntitlement error', error);
+    log.error('recordEntitlement error', errorLogFields(error));
     return false;
   }
   return true;
@@ -257,7 +258,7 @@ export async function revokeByPaymentIntent(
     .update({ status: 'refunded', updated_at: new Date().toISOString() })
     .eq('stripe_payment_intent_id', paymentIntentId);
   if (error) {
-    console.error('revokeByPaymentIntent error', error);
+    log.error('revokeByPaymentIntent error', errorLogFields(error));
     return false;
   }
   return true;
@@ -279,7 +280,7 @@ export async function emailHasActiveEntitlement(
     .eq('status', 'active')
     .limit(1);
   if (error) {
-    console.error('emailHasActiveEntitlement error', error);
+    log.error('emailHasActiveEntitlement error', errorLogFields(error));
     return null;
   }
   return (data?.length ?? 0) > 0;

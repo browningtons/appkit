@@ -36,6 +36,7 @@ import {
   serverModeEnabled,
   serverModePartiallyConfigured,
 } from './_lib';
+import { errorLogFields, log } from './_log';
 
 // Stripe signature verification needs the exact raw request bytes, so opt out
 // of Vercel's automatic body parsing for this route.
@@ -74,7 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // in the dashboard. A retry storm is a nuisance; silently denying paying
   // customers is not. Loud beats quiet when the quiet version is invisible.
   if (serverModePartiallyConfigured()) {
-    console.error(
+    log.error(
       'stripe-webhook: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set but ' +
         'STRIPE_WEBHOOK_SECRET is missing. Server mode is half-configured: the ' +
         'entitlements table can never be written, so paying customers will be ' +
@@ -103,7 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     event = stripe.webhooks.constructEvent(raw, sig, webhookSecret);
   } catch (err) {
-    console.error('stripe-webhook signature verification failed', err);
+    log.error('stripe-webhook signature verification failed', errorLogFields(err));
     return res.status(400).json({ error: 'invalid signature' });
   }
 
@@ -157,7 +158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     // Return 500 so Stripe retries — the handler is idempotent (upsert by
     // session id; refund update is a no-op if already refunded).
-    console.error('stripe-webhook handler error', err);
+    log.error('stripe-webhook handler error', errorLogFields(err));
     return res.status(500).json({ error: 'handler failed' });
   }
 }
