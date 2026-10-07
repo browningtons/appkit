@@ -144,6 +144,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // support email filtering, so we page through the most recent results.
       // This catches guest checkouts where no Customer object was created.
       // For launch volume this is fine — revisit if Pro buyers exceed ~500.
+      //
+      // The scan is account-wide, not scoped to this app's product — Stripe
+      // accounts shared across products are the norm in this portfolio. An
+      // email can legitimately own a settled session for a DIFFERENT product
+      // (e.g. a more recent guest checkout elsewhere on the same account). Each
+      // email-matching session must be checked against this app's price/product
+      // before deciding, and a non-match must not stop the scan short — only
+      // exhausting every page without a Pro match means "not found".
       const MAX_PAGES = 5;
       let startingAfter: string | undefined;
       for (let page = 0; page < MAX_PAGES; page++) {
@@ -151,19 +159,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           limit: 100,
           ...(startingAfter ? { starting_after: startingAfter } : {}),
         });
-        const hit = batch.data.find(
+        const candidates = batch.data.filter(
           (s) =>
             sessionIsSettled(s.payment_status) &&
             s.customer_details?.email?.toLowerCase() === target,
         );
-        if (hit) {
-          const full = await stripe.checkout.sessions.retrieve(hit.id, {
+        for (const candidate of candidates) {
+          const full = await stripe.checkout.sessions.retrieve(candidate.id, {
             expand: ['line_items', 'payment_intent.latest_charge'],
           });
-          const verified =
+          if (
             lineItemMatchesPro(full.line_items, priceId, productId) &&
-            !sessionRefundedInFull(full);
-          return res.status(200).json({ verified });
+            !sessionRefundedInFull(full)
+          ) {
+            return res.status(200).json({ verified: true });
+          }
         }
         if (!batch.has_more) break;
         startingAfter = batch.data[batch.data.length - 1]?.id;
