@@ -310,6 +310,31 @@ this was ported *from* their fixes).
 
 ## Completed
 
+### A14 — Guest restore-by-email scan no longer short-circuits on a different product's session — 2026-10-07
+*(Revenue Rail; closes R11 (High))*
+
+The guest-checkout fallback scan in `api/verify-purchase.ts` POST picked the
+first settled session matching the restore email via `.find()`, account-wide
+— not scoped to this app's price/product. On a Stripe account shared across
+products (the norm in this portfolio), a more recent settled session for a
+*different* product under the same email made the scan return
+`verified: false` immediately, without ever reaching the buyer's real,
+older Pro purchase. Both real adopters had already hit and fixed this
+independently (`debt-snowball-ant`'s scan explicitly guards against it;
+`our-family-lizard` filters by email server-side and loops every match) —
+appkit, the reference kit every new adopter copies, was the one carrier
+still shipping it.
+
+Changed `.find()` to filter every settled email-matching candidate per page,
+check each one's line items before accepting, and only report "not found"
+after exhausting all pages with no Pro match.
+
+**Verified:** new `api/restore-cross-product.test.ts` (2 tests) — confirmed
+red against the pre-fix code by reverting the change and re-running. `npm
+run verify` green (lint, 129/129 tests, build, 0 production
+vulnerabilities); `npm run build:lib` green. Not verified against
+live/test-mode Stripe (pack safety line).
+
 ### A13 — Keep Checkout Session ids out of Vercel logs — 2026-10-05
 *(interactive session, Meseeks `bc752ae3`)*
 
@@ -475,4 +500,62 @@ initialization, which A7 doesn't currently propose) rather than relying on a
 code comment. Effort is near-zero; the only reason to hold it is that a
 build-time string match is brittle against paraphrase, which is an
 acceptable gap — brittle-but-loud beats silent-but-flexible for a legal
-string.
+string. *(Landed 2026-09-04 — see "A7 follow-up" in Completed: `setKitConfig`
+now `console.error`s if `trustLine` still equals a shipped placeholder. The
+main bet above it — kill/demote client-only mode — has not landed; grep of
+`api/_lib.ts`/`src/kit/config.ts` this run found no warning on
+`serverModeEnabled() === false`, so it's still live, unactioned proposal.)*
+
+## Radical bets — 2026-W41 (Analogical transfer)
+
+_(Learning Loop wolf, weekly Pathfinder pass — proposals for Paul to select,_
+_NOT auto-build. 2026-10-07, W41, lens = Analogical transfer: what pattern_
+_from elsewhere in the portfolio would be radical if imported here?)_
+
+**The bet: the cross-product-session bug R11 just closed has now been
+independently invented and fixed three times — turn the fix into a shared
+kit primitive instead of a fourth paragraph in a risk register.**
+`debt-snowball-ant`'s `verify-purchase.ts` loops every email-matching session
+"so that a cross-product session ... does not short-circuit the scan";
+`our-family-lizard` filters server-side on `customer_details.email` plus the
+same per-session loop; appkit itself — the reference every new adopter
+copies — shipped the short-circuiting `.find()` version until today's R11
+fix ported the same loop-not-find pattern a third time. Three independent
+authors converging on the identical fix shape is a strong signal the
+invariant is real, and appkit being the *last* of the three to land it is
+the sharper finding: the reference kit was the one still shipping the bug
+to the next adopter. The portfolio-level pattern this pass is importing
+isn't the fix itself (already landed) — it's the pack's own rule that **"a
+correction survives only as a guard, not a paragraph"** (`docs/RULES.md`
+Memory), applied to kit code instead of pack process: extract the
+settled-candidate scan `R11` just wrote in `api/verify-purchase.ts` into a
+named, exported, unit-tested helper (e.g. `findSettledProSession`), and say
+in `ADOPTING.md`, next to the existing env-manifest guidance, "any Stripe
+session/customer lookup you add — webhooks, subscription renewal, refund
+handling — should call this helper, not write a fresh `.find()` over a
+shared-account session list." **Smallest first slice:** pure refactor, zero
+behavior change — move the logic R11's test (`api/restore-cross-product.test.ts`)
+already covers out of the inline guest-scan branch into its own exported
+function with that same test attached, no adopter migration yet. **Risk:**
+low/mechanical for the extraction; the harder, Paul's-call version of this
+bet already exists one level up — `debt-snowball-ant`'s W37 (Inversion) bet
+proposed giving each app its own Stripe scope so this bug class is
+structurally impossible rather than defended-against in code. R11 is a third
+data point for that bet, not a new one; this pass surfaces the cross-reference
+rather than re-proposing it.
+
+**Supporting bet: import `economic-dashboard`/`golden-data-app`'s
+machine-readable `data_status.json` PASS/N-of-N pattern as a `kit:doctor`
+check.** Revenue Rail currently finds the same 2-3 bug shapes — incomplete
+server-mode env vars (R5/R6), an unedited `trustLine` (R7, partially caught
+today only via a `console.error` at runtime init, not before deploy) — by
+reading code on each periodic visit, weeks apart. The dashboard apps prove a
+cheaper pattern: one fetchable, structured status object an adopter (or CI)
+can check on every PR instead of waiting for the next wolf visit.
+**Smallest first slice:** consolidate the two checks that already exist as
+scattered inline logic into one `npm run kit:doctor` script printing a
+PASS/FAIL object — no new invariants, no CI wiring yet; that's a `[→
+launch-shield]` follow-up once the script exists. **Risk:** low; the main
+hazard is scope creep into re-deriving the whole risk register as code when
+only two real adopters exist today — hold the line at the checks already
+proven to recur.
