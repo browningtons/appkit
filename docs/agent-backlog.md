@@ -310,6 +310,31 @@ this was ported *from* their fixes).
 
 ## Completed
 
+### A14 — Guest restore-by-email scan no longer short-circuits on a different product's session — 2026-10-07
+*(Revenue Rail; closes R11 (High))*
+
+The guest-checkout fallback scan in `api/verify-purchase.ts` POST picked the
+first settled session matching the restore email via `.find()`, account-wide
+— not scoped to this app's price/product. On a Stripe account shared across
+products (the norm in this portfolio), a more recent settled session for a
+*different* product under the same email made the scan return
+`verified: false` immediately, without ever reaching the buyer's real,
+older Pro purchase. Both real adopters had already hit and fixed this
+independently (`debt-snowball-ant`'s scan explicitly guards against it;
+`our-family-lizard` filters by email server-side and loops every match) —
+appkit, the reference kit every new adopter copies, was the one carrier
+still shipping it.
+
+Changed `.find()` to filter every settled email-matching candidate per page,
+check each one's line items before accepting, and only report "not found"
+after exhausting all pages with no Pro match.
+
+**Verified:** new `api/restore-cross-product.test.ts` (2 tests) — confirmed
+red against the pre-fix code by reverting the change and re-running. `npm
+run verify` green (lint, 129/129 tests, build, 0 production
+vulnerabilities); `npm run build:lib` green. Not verified against
+live/test-mode Stripe (pack safety line).
+
 ### A13 — Keep Checkout Session ids out of Vercel logs — 2026-10-05
 *(interactive session, Meseeks `bc752ae3`)*
 

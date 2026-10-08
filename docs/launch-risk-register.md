@@ -73,6 +73,47 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
 
 ## Closed
 
+### R11 — Restore-by-email's guest scan could reject a real Pro buyer whose email also appears on a different product's session — **High** — CLOSED 2026-10-07
+
+- **Was:** `api/verify-purchase.ts` POST, the guest-checkout fallback scan (no
+  Stripe Customer object). It paged through `stripe.checkout.sessions.list`
+  — account-wide, not scoped to this app's price/product — and used
+  `batch.data.find(s => sessionIsSettled(s.payment_status) &&
+  s.customer_details?.email === target)` to pick "the" session, then checked
+  that one session's line items and returned whatever that single check said.
+  Stripe accounts in this portfolio are routinely shared across products, so
+  an email can legitimately own a settled session for a *different* product.
+  If that session was more recent than the buyer's genuine Pro purchase
+  (Stripe lists newest first), the scan picked it, found no Pro line item,
+  and returned `verified: false` immediately — never looking at the older,
+  real Pro session, on that page or any later one.
+- **Why it's High, not latent:** both real adopters of this kit already hit
+  and fixed the identical failure shape independently —
+  `debt-snowball-ant`'s `verify-purchase.ts` iterates every email match and
+  explicitly comments *"so that a cross-product session ... does not
+  short-circuit the scan before we reach the actual Pro session"*;
+  `our-family-lizard` sidesteps it with a server-side
+  `customer_details.email` filter plus the same per-session loop. appkit —
+  the reference every new adopter copies — never got either fix, so it was
+  the one carrier left shipping the bug to the next adopter.
+- **Fixed:** the scan now filters each page down to every settled,
+  email-matching candidate (`.filter`, not `.find`), checks each one's line
+  items via `lineItemMatchesPro` before accepting it, and only returns
+  `verified: false` after exhausting all `MAX_PAGES` with no Pro match —
+  porting the pattern already proven in both adopters.
+- **Verified:** new `api/restore-cross-product.test.ts` — a settled
+  different-product session ordered before the genuine Pro session now still
+  resolves `verified: true` (red against the pre-fix code, confirmed by
+  reverting the fix and re-running); a lone different-product match still
+  resolves `verified: false`. `npm run verify` green (lint, 129/129 tests,
+  build, 0 production vulnerabilities); `npm run build:lib` green. Not
+  verified against live/test-mode Stripe (pack safety line).
+- **Left open:** the fast Customer-search path
+  (`stripe.customers.search` branch) already used `.find()` over a single
+  customer's own sessions with the Pro + refund check inside the same
+  predicate, so it was never affected — only the guest fallback scan had the
+  short-circuit.
+
 ### R10 — A failure line could log a buyer's Checkout Session id — **Medium** — CLOSED 2026-10-05 (pending merge)
 - **Was:** a Checkout Session id is a bearer credential in the kit: the
   checkout redirect's `#session_id=cs_…` goes to `GET /api/verify-purchase`,
