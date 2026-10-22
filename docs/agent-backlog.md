@@ -331,6 +331,24 @@ this was ported *from* their fixes).
 
 ## Completed
 
+### A15 — Close the console/process alias escapes in the `api/` logging guard — 2026-10-21
+*(interactive session, agent queue; ports `our-family-lizard` #144, the rest of its A-LG1)*
+
+A13's `no-console` / `no-restricted-properties` only match the literal
+`console.*` / `process.*` member expression, so `const c = console`,
+`const { error } = console`, `globalThis.console`, `globalThis.process` and
+`import { stderr } from 'node:process'` wrote past them. `eslint.config.js`'s
+`api/` block now carries the same `no-restricted-syntax` rule as lizard's.
+The referral-fixture half of #144 (`metadata.source_session_id`, the
+concurrent-click retry log assertion) has no counterpart here — appkit has no
+promotion-code flow — and was not ported.
+
+**Verified:** 7 new cases in `api/logging-guard.test.ts` pin each alias
+shape to `no-restricted-syntax`; exactly those 7 go red with the rule
+removed. `npm run verify` green (lint, 136/136 tests, build, 0 production
+vulnerabilities). Known gaps, as in lizard: a second alias of `globalThis`
+itself and `console[method]` still get past.
+
 ### A14 — Guest restore-by-email scan no longer short-circuits on a different product's session — 2026-10-07
 *(Revenue Rail; closes R11 (High))*
 

@@ -31,6 +31,23 @@ describe('only api/_log.ts writes output in api/', { timeout: 30_000 }, () => {
     expect(await rulesBroken(code, filePath)).toContain('no-restricted-properties');
   });
 
+  it.each([
+    ['const c = console;', 'api/verify-purchase.ts'],
+    ['const { error } = console;', 'api/verify-purchase.ts'],
+    ['globalThis.console.log(session.id);', 'api/stripe-webhook.ts'],
+  ])('refuses `%s` in %s', async (code, filePath) => {
+    expect(await rulesBroken(code, filePath)).toContain('no-restricted-syntax');
+  });
+
+  it.each([
+    ['const p = process;', 'api/stripe-webhook.ts'],
+    ['globalThis.process.stdout.write(message);', 'api/_lib.ts'],
+    ["import { stderr } from 'node:process';", 'api/verify-purchase.ts'],
+    ["import { emitWarning } from 'process';", 'api/stripe-webhook.ts'],
+  ])('refuses `%s` in %s', async (code, filePath) => {
+    expect(await rulesBroken(code, filePath)).toContain('no-restricted-syntax');
+  });
+
   it('does not honour a disable comment in api/', async () => {
     const broken = await rulesBroken(
       '// eslint-disable-next-line no-console\nconsole.error(err);',
