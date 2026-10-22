@@ -35,20 +35,28 @@ was a stale duplicate of the same item, never removed when it closed)
   lockfile. Filed to Meseeks as a permissions follow-up; don't re-diagnose,
   just apply it.
 
-### A12 — `UpgradeModal`'s close button and restore link are under the mobile tap-target minimum — **score 4**
-- Impact 2, Confidence 4, Risk Reduction 1, Effort −3.
-- Noted by User Journey 2026-09-25 while fixing A11 in the same file's sibling
-  component; not fixed here to keep that change to the one thing it was for.
-  `UpgradeModal.tsx`'s close button is `w-8 h-8` (32px) and the "Already
-  purchased? Restore" link is `text-[11px]` with no padding — both below the
-  ~44px minimum tap target Apple/Google guidance recommends, on a modal
-  rendered `items-end` (bottom sheet) on mobile by default. Neither is
-  provably broken (both still register a tap), so this is a friction note,
-  not a confirmed dead-end — bump the close button's hit area (e.g. padding
-  or a larger invisible tap zone) and give the restore link real padding
-  before removing this line.
-
 ## Completed
+
+### A12 — `UpgradeModal`'s close button and restore link are under the mobile tap-target minimum — 2026-10-21
+*(User Journey)*
+
+`UpgradeModal.tsx`'s close button was `w-8 h-8` (32px) and the "Already
+purchased? Restore" link was `text-[11px]` with no padding — both below the
+~44px minimum tap target Apple/Google guidance recommends, on a modal
+rendered `items-end` (bottom sheet) on mobile by default. Neither was
+provably broken (both still registered a tap), but a 32px target on a
+bottom-sheet close button is exactly the kind of near-miss a thumb fumbles
+on a real device, and this kit is what every adopter copies verbatim.
+
+Close button bumped to `w-11 h-11` (44px; nudged from `top-3 right-3` to
+`top-2 right-2` so its visual position against the header stays put) and
+the restore link wrapped in `min-h-[44px] inline-flex items-center
+justify-center px-3` so its hit area meets the minimum without changing its
+text size or underline styling.
+
+**Verified:** `npm run lint` clean, `npm run build` clean, `npm test`
+129/129 passing (no existing test asserts tap-target size, so this is a
+code-read + Tailwind-class proof, not a rendered-pixel one).
 
 ### A13 — Retry the dependency-audit gate against npm's classic-audit-endpoint 400s — 2026-09-30
 *(Launch Shield; ports [deseret-xeriscaping#42](https://github.com/browningtons/deseret-xeriscaping/pull/42))*

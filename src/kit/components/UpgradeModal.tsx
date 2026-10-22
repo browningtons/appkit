@@ -42,7 +42,7 @@ export default function UpgradeModal({ onClose, onRestore, source }: UpgradeModa
         <div className="bg-gradient-to-br from-emerald-700 to-emerald-900 p-6 text-white text-center relative">
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+            className="absolute top-2 right-2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
             aria-label="Close upgrade modal"
           >
             <X size={16} />
@@ -94,7 +94,7 @@ export default function UpgradeModal({ onClose, onRestore, source }: UpgradeModa
         <div className="px-6 pb-5 text-center">
           <button
             onClick={onRestore}
-            className="text-[11px] text-stone-400 hover:text-stone-600 underline underline-offset-2 transition-colors"
+            className="min-h-[44px] inline-flex items-center justify-center px-3 text-[11px] text-stone-400 hover:text-stone-600 underline underline-offset-2 transition-colors"
           >
             Already purchased? Restore
           </button>
