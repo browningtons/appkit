@@ -73,6 +73,49 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
 
 ## Closed
 
+### R12 — A Stripe test-mode key in Production fails nowhere until a real buyer is told "no purchase found" — **Medium** — CLOSED 2026-10-21
+
+- **Was:** `api/verify-purchase.ts` and `api/stripe-webhook.ts` read
+  `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` straight from
+  `process.env` and handed them to `new Stripe(secret)` /
+  `constructEvent(…)` with no check on their mode or shape, and nothing in
+  the repo read `VERCEL_ENV`. A test-mode key (`sk_test_…`) is
+  indistinguishable from a live one by eye in a Vercel env var, and R5's
+  `.env.example` note ("keep whole sets together") was the only guardrail —
+  prose, not a check. Pasted into Production it fails nowhere loud:
+  `new Stripe` accepts it, the routes answer, and only a real buyer finds
+  out — their live Checkout Session is invisible to a test-mode key, so
+  GET verify-purchase says `verified: false`, restore-by-email scans an
+  empty test account, and the webhook can never match a live event. The
+  same class golden-data-app closed for Payment Links as its R10
+  (`assertLiveStripeUrl()`, PR #288), on the server-side keys.
+- **Why Medium:** the kit is the reference both adopters copy, so the gap
+  ships forward; likelihood is a one-time paste mistake per deploy, impact
+  is every buyer denied until someone notices.
+- **Fixed:** `api/_stripe-mode.ts` — `stripeKeyProblem(env)` names the
+  problem (secret key not `sk_live_`/`rk_live_`, webhook secret not
+  `whsec_`) only when `VERCEL_ENV === 'production'`, and
+  `assertLiveStripeKeys()` throws on it. Both routes call it at module
+  load, so a misdeployed Production function fails on its first cold start
+  (FUNCTION_INVOCATION_FAILED, the named error in the runtime log) instead
+  of answering buyers wrong. Unset keys stay the dormant state the handlers
+  answer for; preview, development and tests accept any key. The error
+  names the variable and the expected shape, never the value.
+- **Verified:** new `api/_stripe-mode.test.ts` — 11 tests: the mode and
+  shape rules, the non-production allowance, the message never carrying the
+  value, and the wiring (each route's import rejects under
+  `VERCEL_ENV=production` + `sk_test_x` and resolves under `sk_live_x`).
+  `npm run verify` green (lint, 147/147 tests, build, 0 production
+  vulnerabilities); `npm run build:lib` green. Proved through the built
+  bundle: `VERCEL_ENV=production STRIPE_SECRET_KEY=sk_test_x node -e
+  "import('./dist/verify-purchase.js')"` throws the named error; the same
+  with `sk_live_x`, and with `VERCEL_ENV=preview` + a test key, loads. Not
+  verified against a real Vercel deploy (pack safety line).
+- **Left open:** a *live* key in a preview deploy is allowed on purpose
+  (the adopters use the live key locally for tester codes); a key and price
+  from different modes but the same (live) prefix still only fail at
+  request time, as before.
+
 ### R11 — Restore-by-email's guest scan could reject a real Pro buyer whose email also appears on a different product's session — **High** — CLOSED 2026-10-07
 
 - **Was:** `api/verify-purchase.ts` POST, the guest-checkout fallback scan (no

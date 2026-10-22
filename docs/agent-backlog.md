@@ -339,6 +339,35 @@ this was ported *from* their fixes).
 
 ## Completed
 
+### A16 — Production refuses a Stripe key from the wrong mode at load — 2026-10-21
+*(agent queue, interactive session; closes R12 (Medium))*
+
+golden-data-app's PR #288 closed the Payment-Link half of this class
+(`assertLiveStripeUrl()` fails the build on a `buy.stripe.com/test_…` link).
+The three repos that run server-side Stripe had no counterpart: here,
+`api/verify-purchase.ts` and `api/stripe-webhook.ts` read
+`STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` raw, `new Stripe(secret)`
+accepts any string, and nothing read `VERCEL_ENV`. A pasted `sk_test_…` in
+Production fails only in the buyer's hands ("no purchase found" for every
+real purchase).
+
+Added `api/_stripe-mode.ts` (`stripeKeyProblem`, `assertLiveStripeKeys`),
+called at module load by both routes: under `VERCEL_ENV === 'production'` a
+secret key that is not `sk_live_`/`rk_live_`, or a webhook secret that is
+not `whsec_`, throws at cold start with an error that names the variable
+and the shape, never the value. Unset keys and every non-production
+environment pass. One line in `.env.example` says so. Adopters get it
+through the kit's `verify-purchase` / `stripe-webhook` exports; the same
+guard goes to `our-family-lizard` and `snowball-penguin` in their own PRs.
+
+**Verified:** `api/_stripe-mode.test.ts` (11 tests, incl. each route's
+import rejecting under production + `sk_test_x` and resolving under
+`sk_live_x`); `npm run verify` green (lint, 147/147 tests, build, 0
+production vulnerabilities); `npm run build:lib` green; the built
+`dist/verify-purchase.js` throws under production + a test key and loads
+under a live key or in preview. Not verified against a real Vercel deploy
+(pack safety line).
+
 ### A15 — Close the console/process alias escapes in the `api/` logging guard — 2026-10-21
 *(interactive session, agent queue; ports `our-family-lizard` #144, the rest of its A-LG1)*
 

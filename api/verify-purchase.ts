@@ -27,6 +27,11 @@ import {
   sessionRefundedInFull,
 } from './_lib';
 import { errorLogFields, log } from './_log';
+import { assertLiveStripeKeys } from './_stripe-mode';
+
+// A test-mode key in Production is a misdeploy, not a dormant state: fail
+// here, at load, so this function never answers a buyer with it.
+assertLiveStripeKeys();
 
 // ---------------------------------------------------------------------------
 // Rate limiting.
