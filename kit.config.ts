@@ -30,7 +30,7 @@ export const KIT_CONFIG: KitConfig = {
       'Export / share / etc.',
     ],
     trustLine:
-      'Secure payment via Stripe. 30-day refund, no questions asked. No account. No recurring charges.',
+      'Demo copy only — not a real refund promise. Real apps: write your own here (see kit.config.example.ts).',
   },
 
   analytics: {
