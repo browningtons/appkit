@@ -1,0 +1,7 @@
+{
+  "outDir": "../public",
+  "tile": "#27B8D6",
+  "radius": 0.22,
+  "icon": { "source": "pebble.png", "key": "#000000", "scale": 0.78 },
+  "small": { "source": "pebble.png", "key": "#000000", "scale": 0.92, "crop": [340, 20, 950, 560], "anchor": "bottom" }
+}
