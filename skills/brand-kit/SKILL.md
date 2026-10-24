@@ -123,8 +123,10 @@ Paul usually wants the audit first, then picks what to build from it.
    - Run `vite preview` and fetch each icon path to confirm `image/*` at the
      right size. Use the snippet below in the browser pane, and include the
      legal pages.
-   - After deploy, `curl -sI https://<domain>/favicon.ico` should show
-     `image/x-icon`.
+   - After deploy, `curl -sI https://<domain>/favicon.ico` should show an
+     icon content-type (Vercel sends `image/vnd.microsoft.icon`), not
+     `text/html`. Check the PR's preview first; it's behind Vercel login, so
+     fetch it through the Vercel connector's `web_fetch_vercel_url`.
 
    ```js
    for (const p of ['/favicon.ico','/favicon-96.png','/apple-touch-icon.png','/icon-192.png','/icon-512.png','/icon-maskable-512.png']) {
