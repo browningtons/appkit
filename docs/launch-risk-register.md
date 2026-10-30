@@ -22,6 +22,45 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
 
 ## Closed
 
+### R13 — A failed durable-store write still acked the webhook 200 — **High** — CLOSED 2026-10-30
+- **Was:** `api/stripe-webhook.ts`'s three event cases called `recordEntitlement`/
+  `revokeByPaymentIntent` and ignored the boolean they return. Both functions
+  swallow their own Supabase error (log it, return `false`) by design — that's
+  correct for their other caller, `verify-purchase.ts`'s best-effort confirmation
+  write, which must not 500 a buyer who already has their real `verified: true`.
+  But the webhook has no buyer-facing response to protect, and a `false` there
+  means the write that should have happened — grant Pro on
+  `checkout.session.completed`, or revoke it on `charge.refunded` /
+  `charge.dispute.closed` (lost) — never did. The handler still fell through to
+  `return res.status(200).json({ received: true, handled: true })`, so Stripe
+  recorded a successful delivery and never retried. A transient Supabase outage,
+  a revoked service-role key, or any other write failure during the window a
+  buyer's webhook fires meant: a real buyer told "no purchase found" forever (no
+  safety net if they never load the post-checkout confirmation page, which is
+  the one case the webhook exists to cover), or a refunded/charged-back buyer
+  keeping Pro forever — both silent, no exception surfaced to Stripe, no retry,
+  no alert. Same shape as R6/`serverModePartiallyConfigured` ("ack must mean
+  written"), just for an ordinary write failure instead of a half-configured env.
+- **Fixed:** each case now throws when its write call returns `false`, so the
+  existing outer `catch` — which already logs and returns 500 specifically
+  because "the handler is idempotent (upsert by session id; refund update is a
+  no-op if already refunded)" — handles it and Stripe retries. No change to
+  `recordEntitlement`/`revokeByPaymentIntent` themselves or to
+  `verify-purchase.ts`'s use of them.
+- **Verified:** new `api/webhook-write-failure.test.ts` (4 tests) — a mocked
+  Supabase write failure 500s for all three event types (confirmed red against
+  the pre-fix handler by reverting the change and re-running: 3 of 4 failed,
+  `expected 200 to be 500`), and a successful write still acks
+  `{received:true, handled:true}` (regression guard, unchanged behavior).
+  `npm run verify` green (lint, 151/151 tests, build, 0 production
+  vulnerabilities); `npm run build:lib` green. Not verified against live/test
+  Stripe (pack safety line) — the mocked failure is in the Supabase client, not
+  Stripe's delivery/retry behavior itself.
+- **Left open:** this is scoped to appkit. `our-family-lizard` and
+  `snowball-penguin` both run their own server-side entitlement writes off a
+  Stripe webhook — filed to Meseeks to check whether either ignores a failed
+  write the same way.
+
 ### R7 — The kit ships a refund promise that reads like finished copy — **Low** — CLOSED 2026-09-04
 - **Was:** `kit.config.example.ts` → `upgrade.trustLine`: *"Secure payment via
   Stripe. 30-day refund, no questions asked. No account. No recurring
