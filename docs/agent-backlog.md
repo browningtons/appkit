@@ -19,23 +19,42 @@ risks in [docs/launch-risk-register.md](launch-risk-register.md).
 was a stale duplicate of the same item, never removed when it closed)
 
 ### ~~A8~~ CLOSED 2026-08-25 — flipped by hand with `workflow` scope (see Completed)
-- Impact 3, Confidence 4, Risk Reduction 3, Effort −4.
-- A5/R8 held this back pending "a day of evidence" from the scheduled
-  `dependency-audit.yml`. **That evidence never arrived — PR #8 sat unmerged
-  13 days**, so the scheduled workflow never ran on the default branch at all
-  (`gh workflow list` showed only `CI`). This run tried to land the flip
-  directly instead, on live proof (see the R8 addendum): `git push` was
-  **rejected by GitHub** — `refusing to allow a Personal Access Token to
-  create or update workflow .github/workflows/ci.yml without workflow
-  scope`. The lane's push token can edit every file in this repo except the
-  one this task needs to touch.
-- **Next wolf / a human with `workflow` scope:** the one-line change is
-  `- run: npm install` → `- run: npm ci` in `.github/workflows/ci.yml`,
-  already proven safe by this run's `npm ci` pass against the re-repaired
-  lockfile. Filed to Meseeks as a permissions follow-up; don't re-diagnose,
-  just apply it.
 
 ## Completed
+
+### A17 — No coverage floor; `@vitest/coverage-v8` installed but never wired to a gate — 2026-11-01
+*(Launch Shield; promotes `debt-snowball-dolphin`'s coverage-threshold pattern into the reference kit)*
+
+`@vitest/coverage-v8` sat in `devDependencies` unused — no `vitest.config`
+coverage block, no `test:coverage` script, no CI step, so a coverage
+collapse on any file would land silently. As the reference kit, that gap
+ships forward to every adopter the same way an unguarded dependency or
+build flake would. Measured baseline before any new tests: 63.11%
+statements, 62.67% branches, 69.76% functions, 63.61% lines (`npx vitest
+run --coverage`, default per-file scope — see "Left open" below).
+
+`vite.config.ts`'s `defineConfig` import moved from `vite` to `vitest/config`
+(needed for the `test` key to type-check under `tsc -b`) and gained a
+`test.coverage.thresholds` block set a few points under the measured
+baseline — a floor, not a pin: `statements: 60, branches: 60, functions: 65,
+lines: 60`. New `test:coverage` script (`vitest run --coverage`); `verify`
+and `.github/workflows/ci.yml` both call it in place of the old bare `test`
+step, so the local gate and CI can't drift apart. `coverage/` added to
+`.gitignore`.
+
+**Verified:** `npm run verify` green end to end (lint, 147/147 tests +
+coverage report, build, 0 production vulnerabilities). Threshold mechanism
+sanity-checked by temporarily setting `statements: 95` — failed with `ERROR:
+Coverage for statements (63.11%) does not meet global threshold (95%)` — then
+reverted to 60.
+
+**Left open:** `coverage.all` (report 0% for files no test touches at all)
+didn't surface `src/kit/components/*.tsx`, `App.tsx`/`main.tsx`,
+`useEntitlement.ts` etc. the way it does in other repos on this same vitest
+version — the per-file report only ever lists files a test actually imports,
+so the true "every shipped file" number is unmeasured and likely lower than
+63%. Didn't chase it inside this visit's budget; worth a follow-up before
+trusting this gate as a UI-coverage signal rather than a money-path-logic one.
 
 ### A12 — `UpgradeModal`'s close button and restore link are under the mobile tap-target minimum — 2026-10-21
 *(User Journey)*
