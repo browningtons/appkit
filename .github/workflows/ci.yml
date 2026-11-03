@@ -16,7 +16,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
-      - run: npm test
+      - run: npm run test:coverage
       - run: npm run build
 
       # Runs the same script as `npm run verify` and the scheduled

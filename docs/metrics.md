@@ -27,8 +27,10 @@ Goal: every row ✅ with a pure unit test. Fill top-down by backlog rank.
 
 ## Build / CI health
 
-- `npm run lint && npm test && npm run build` is the local gate. CI (`.github/workflows/ci.yml`)
-  runs the same on push/PR to `main`.
+- `npm run verify` (lint, `test:coverage`, build, `audit:deps`) is the local gate. CI
+  (`.github/workflows/ci.yml`) runs the same steps on push/PR to `main`.
+- Coverage floor (2026-11-01, A17): statements 60% / branches 60% / functions 65% /
+  lines 60%, a few points under the measured baseline — regression guard, not a target.
 - No dependency-audit step yet (A5). Watch the recurring **dompurify** CVE.
 
 ## Adopter drift (reference-repo duty)
