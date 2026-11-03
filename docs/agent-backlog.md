@@ -22,6 +22,42 @@ was a stale duplicate of the same item, never removed when it closed)
 
 ## Completed
 
+### A17 follow-up — coverage gate now scores every shipped file, not just imported ones — 2026-11-03
+*(Launch Shield; closes A17's own "Left open" gap, two days later)*
+
+A17 (below) measured the baseline with vitest's default per-file v8 report,
+which only lists a file if some test imports it — it said so itself in "Left
+open": `src/kit/components/*.tsx`, `App.tsx`/`main.tsx`, `useEntitlement.ts`
+never showed up, so the true "every shipped file" number was unmeasured and
+"likely lower than 63%." It was: adding `coverage.include` (`api/**/*.ts`,
+`src/**/*.{ts,tsx}`, excluding tests and the demo's `main.tsx` boot file) so
+the v8 provider scores every matched file whether a test touches it or not
+dropped the measured baseline to **59.11% / 57% / 56.31% / 59.04%**
+(statements/branches/functions/lines) — five zero-coverage files included:
+`AdminBar.tsx`, `LockedOverlay.tsx`, `ProBadge.tsx`,
+`PurchaseConfirmation.tsx`, `UpgradeModal.tsx` (all five are exported,
+shipped kit components, not demo-only), plus `useEntitlement.ts` and the
+demo's `App.tsx`. Thresholds in `vite.config.ts` moved down to the new real
+floor: `56/54/51/55`, same "a few points under baseline" shape A17 used (the
+old `60/60/65/60` floor was sitting a few points under a number the gate
+couldn't actually see).
+
+(Vitest 4's `@vitest/coverage-v8` types no longer accept a `coverage.all`
+option — `include` alone is sufficient to pull in untouched files; `tsc -b`
+caught the stale `all: true` immediately, since `vite.config.ts` is itself
+type-checked by the build step.)
+
+**Verified:** `npx vitest run --coverage` green at the new thresholds (147
+tests, 0 failures); sanity-checked both directions — bumping `statements` to
+95 in-place fails with `ERROR: Coverage for statements (59.11%) does not
+meet global threshold (95%)`, reverting passes clean. `npm run verify` green
+end to end (lint, coverage gate, build, `audit:deps` 0 vulnerabilities).
+
+**Left open:** the five zero-coverage kit components and `useEntitlement.ts`
+still have no tests — the gate now sees them and holds the line at the real
+number, but closing the gap itself (writing tests for those files) is
+separate, larger work, not done in this visit.
+
 ### A17 — No coverage floor; `@vitest/coverage-v8` installed but never wired to a gate — 2026-11-01
 *(Launch Shield; promotes `debt-snowball-dolphin`'s coverage-threshold pattern into the reference kit)*
 
