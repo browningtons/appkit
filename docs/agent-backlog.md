@@ -48,13 +48,24 @@ sanity-checked by temporarily setting `statements: 95` — failed with `ERROR:
 Coverage for statements (63.11%) does not meet global threshold (95%)` — then
 reverted to 60.
 
-**Left open:** `coverage.all` (report 0% for files no test touches at all)
-didn't surface `src/kit/components/*.tsx`, `App.tsx`/`main.tsx`,
-`useEntitlement.ts` etc. the way it does in other repos on this same vitest
-version — the per-file report only ever lists files a test actually imports,
-so the true "every shipped file" number is unmeasured and likely lower than
-63%. Didn't chase it inside this visit's budget; worth a follow-up before
-trusting this gate as a UI-coverage signal rather than a money-path-logic one.
+**Follow-up closed 2026-11-03:** `coverage.all` not surfacing untested UI
+was a Vitest 4 behavior change, not a missing `all: true`. Vitest 4.1.8 removed `coverage.all` and
+`coverage.extensions` ([vitest#7837](https://github.com/vitest-dev/vitest/pull/7837)).
+`@vitest/coverage-v8` adds untested files only when `coverage.include` is
+set, and only files that glob matches — with no `include`, the report stays
+limited to files a test imports, so `src/kit/components/*.tsx`, `App.tsx`,
+`main.tsx`, and `useEntitlement.ts` never entered the denominator. Setting
+`all: true` does nothing; the option is gone from `CoverageOptions`.
+
+`coverage.include` is now `src/**/*.{ts,tsx}` plus `api/**/*.ts` (extensions
+in the glob, since `coverage.extensions` is gone too), with `**/*.d.ts`
+excluded so `src/stripe.d.ts` is not treated as a source file. Test files
+stay out via Vitest's built-in rule that appends `test.include` to
+`coverage.exclude`. Reproduced before the change: 63.11/62.67/69.76/63.61,
+no component files in the table. After: those files report 0%, and the
+all-files baseline is 58.99% statements, 57% branches, 56.31% functions,
+58.9% lines (282/478, 183/321, 58/103, 248/421). The floor moved with that
+baseline, still a few points under: 55/54/52/55.
 
 ### A12 — `UpgradeModal`'s close button and restore link are under the mobile tap-target minimum — 2026-10-21
 *(User Journey)*

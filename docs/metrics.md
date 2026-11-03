@@ -29,8 +29,12 @@ Goal: every row ✅ with a pure unit test. Fill top-down by backlog rank.
 
 - `npm run verify` (lint, `test:coverage`, build, `audit:deps`) is the local gate. CI
   (`.github/workflows/ci.yml`) runs the same steps on push/PR to `main`.
-- Coverage floor (2026-11-01, A17): statements 60% / branches 60% / functions 65% /
-  lines 60%, a few points under the measured baseline — regression guard, not a target.
+- Coverage floor (2026-11-03, A17 follow-up): statements 55% / branches 54% /
+  functions 52% / lines 55%. Vitest 4 only counts untested files when
+  `coverage.include` lists them, so the 2026-11-01 floor (60/60/65/60) was
+  measured on imported files alone (~63/63/70/64) and let untested UI through.
+  The floor now sits a few points under the all-files baseline
+  (58.99/57/56.31/58.9). Regression guard, not a target.
 - No dependency-audit step yet (A5). Watch the recurring **dompurify** CVE.
 
 ## Adopter drift (reference-repo duty)
