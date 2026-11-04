@@ -22,6 +22,72 @@ was a stale duplicate of the same item, never removed when it closed)
 
 ## Completed
 
+### A20 — CI holds both shipped configs to the trustLine placeholder set — 2026-11-04
+*(Meseeks card 2e36717e, filed by Trust Ledger on 2026-10-24 from PR #29;
+worked by an interactive session, not a lane run)*
+
+R7/A7 made `kit.config.example.ts`'s refund promise an obvious `REPLACE_ME`
+and added the `setKitConfig` console.error guard against both placeholder
+strings. The repo's own `kit.config.ts` (the demo `npm run dev` renders) kept
+the identical pre-R7 finished-looking promise for seven more weeks, because
+the runtime guard only ever logged on a dev run nobody reads; Trust Ledger
+fixed the copy by hand in #29 and asked for a build-time check so the next
+near-miss fails CI instead.
+
+`PLACEHOLDER_TRUST_LINES` in `src/kit/config.ts` is now exported (as a
+`ReadonlySet`, same contents). New `src/kit/trustLinePlaceholders.test.ts`
+reads both tracked configs off disk and asserts: the guard set still names
+both historical placeholders; `kit.config.ts` contains none of them and still
+says "Demo copy only"; `kit.config.example.ts` contains the `REPLACE_ME`
+placeholder and never the finished prose. A test rather than a grep step in
+`ci.yml` so it runs under `npm run verify` locally and in CI alike, and so a
+third placeholder added to the set is checked without touching the workflow.
+
+**Verified:** `npm run verify` green — lint, 150/150 tests, coverage
+63.1% statements / 69.8% functions (floor 60/65), build, 0 production
+vulnerabilities. Sanity-checked by pasting the pre-R7 prose back into
+`kit.config.ts`: the test fails naming the string; reverted.
+
+### A19 — Boot re-verify revoked Pro on a device holding both a session id and a restore email — 2026-11-04
+*(Meseeks card 0ce81e8b, filed by Revenue Rail on 2026-10-30 from our-family-lizard#144;
+worked by an interactive session, not a lane run)*
+
+`reVerifyPlan` preferred the `cs_...` session id whenever a device held one,
+so a device that bought once and later restored a *different* purchase by
+email was re-checked against the first purchase only. The moment that first
+purchase was refunded, the boot re-verify revoked Pro — even though the
+email's purchase was still paid. appkit is the reference kit for this flow
+(the header still says "Ported from our-family-lizard#44"), so every adopter
+that copied `proReverify.ts` inherited the false-revoke path. Two smaller
+gaps from the same OFL fix came along: `.startsWith`/`.trim` on a hand-edited
+non-string handle crashed the whole re-verify (OFL A-R1 item 10), and a revoke
+answered after a newer unlock had saved its own handle overwrote that unlock
+(OFL's `revokeStillApplies`).
+
+`src/kit/auth/proReverify.ts`: `reVerifyPlan` returns `{ kind: 'both' }` when
+both handles are on file and guards both handles' types before any string
+method; new `applyBothReVerifyOutcome` keeps Pro while *either* side verifies,
+revokes only when both affirmatively say no, and fails open on half an answer;
+new `revokeStillApplies` + `ProHandles` compare the handles as stored. `useAuth`'s
+boot effect fires the GET and the POST together for a `both` plan, combines
+them, and drops a revoke whose handles changed while it was out. The
+visibility re-check is unchanged (session-only, as before).
+
+**Verified:** `npm run verify` green — lint, 164/164 tests, coverage 67.8%
+statements / 78.1% functions (floor 60/65), build, 0 production
+vulnerabilities. `proReverify.test.ts` rewrites the one assertion that pinned
+the old preference and adds 11 (both-plan, non-string handles, every
+`applyBothReVerifyOutcome` combination, `revokeStillApplies`). New
+`useAuth.bootReverify.test.tsx` (6) renders the hook with both handles and
+checks the two requests go out together, Pro survives a refunded session while
+the restore verifies, revokes only when both fail, fails open on a 5xx or a
+thrown fetch, and drops a revoke after a newer session id was saved.
+
+**Left open:** the visibility re-check still asks the session id only; a
+restored-only device is re-checked on boot but not on refocus. OFL folded both
+into one `runReVerify`; worth the same here on a later Revenue Rail visit.
+
+
 ### A17 — No coverage floor; `@vitest/coverage-v8` installed but never wired to a gate — 2026-11-01
 *(Launch Shield; promotes `debt-snowball-dolphin`'s coverage-threshold pattern into the reference kit)*
 
