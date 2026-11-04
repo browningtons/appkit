@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   shouldReVerify,
+  applyBothReVerifyOutcome,
+  revokeStillApplies,
   reVerifyPlan,
   applyReVerifyResponse,
   REVERIFY_THROTTLE_MS,
@@ -102,11 +104,14 @@ describe('shouldReVerify', () => {
 describe('reVerifyPlan', () => {
   const base = { isProReal: true, sessionId: '', restoreEmail: '', lastCheck: 0, now: NOW };
 
-  it('prefers the session id when both handles are on file', () => {
-    // Exact, no stored PII, one Stripe call.
+  it('checks both handles when both are on file, rather than preferring the session id', () => {
+    // Two handles usually mean two purchases (bought once, later restored a
+    // different one by email). Preferring the session id revoked Pro the
+    // moment that first purchase was refunded, even though the email's
+    // purchase was still paid (our-family-lizard A-R1 item 1).
     expect(
       reVerifyPlan({ ...base, sessionId: 'cs_live_abc', restoreEmail: 'buyer@example.com' }),
-    ).toEqual({ kind: 'session', sessionId: 'cs_live_abc' });
+    ).toEqual({ kind: 'both', sessionId: 'cs_live_abc', email: 'buyer@example.com' });
   });
 
   it('falls back to the restore email when there is no session id', () => {
@@ -155,6 +160,83 @@ describe('reVerifyPlan', () => {
     expect(
       reVerifyPlan({ ...base, sessionId: 'not_a_session', restoreEmail: 'buyer@example.com' }),
     ).toEqual({ kind: 'restore', email: 'buyer@example.com' });
+  });
+
+  it('treats a non-string stored session id as none rather than crashing (A-R1 item 10)', () => {
+    // `load()` JSON-parses localStorage, so a hand-edited value can come back
+    // as a number or an object; the old code called `.startsWith` on it.
+    expect(
+      reVerifyPlan({
+        ...base,
+        sessionId: 42 as unknown as string,
+        restoreEmail: 'buyer@example.com',
+      }),
+    ).toEqual({ kind: 'restore', email: 'buyer@example.com' });
+  });
+
+  it('treats a non-string stored restore email as none rather than crashing (A-R1 item 10)', () => {
+    expect(
+      reVerifyPlan({
+        ...base,
+        sessionId: 'cs_live_abc',
+        restoreEmail: { email: 'buyer@example.com' } as unknown as string,
+      }),
+    ).toEqual({ kind: 'session', sessionId: 'cs_live_abc' });
+  });
+});
+
+describe('applyBothReVerifyOutcome', () => {
+  const keep = { kind: 'keep' } as const;
+  const revoke = { kind: 'revoke' } as const;
+  const failOpen = { kind: 'fail_open' } as const;
+
+  it('keeps pro when the session side still verifies, even if the restore side does not', () => {
+    expect(applyBothReVerifyOutcome(keep, revoke)).toEqual(keep);
+  });
+
+  it('keeps pro when the restore side still succeeds, even if the session side was refunded', () => {
+    // The regression this exists for: the refunded first purchase said
+    // nothing about the second, still-paid one.
+    expect(applyBothReVerifyOutcome(revoke, keep)).toEqual(keep);
+  });
+
+  it('revokes only when both sides affirmatively say no', () => {
+    expect(applyBothReVerifyOutcome(revoke, revoke)).toEqual(revoke);
+  });
+
+  it('fails open when one side revokes and the other is inconclusive', () => {
+    expect(applyBothReVerifyOutcome(revoke, failOpen)).toEqual(failOpen);
+    expect(applyBothReVerifyOutcome(failOpen, revoke)).toEqual(failOpen);
+  });
+
+  it('fails open when both sides are inconclusive', () => {
+    expect(applyBothReVerifyOutcome(failOpen, failOpen)).toEqual(failOpen);
+  });
+});
+
+describe('revokeStillApplies', () => {
+  const checked = { sessionId: '"cs_live_abc"', restoreEmail: null };
+
+  it('applies while the device holds the same handles', () => {
+    expect(revokeStillApplies(checked, { sessionId: '"cs_live_abc"', restoreEmail: null })).toBe(
+      true,
+    );
+  });
+
+  it('is dropped once a checkout has saved a newer session id', () => {
+    expect(revokeStillApplies(checked, { sessionId: '"cs_live_new"', restoreEmail: null })).toBe(
+      false,
+    );
+  });
+
+  it('is dropped once a restore has saved an email', () => {
+    expect(
+      revokeStillApplies(checked, { sessionId: '"cs_live_abc"', restoreEmail: '"b@example.com"' }),
+    ).toBe(false);
+  });
+
+  it('is dropped once a revoke has already cleared the handles', () => {
+    expect(revokeStillApplies(checked, { sessionId: null, restoreEmail: null })).toBe(false);
   });
 });
 

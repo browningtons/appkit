@@ -22,6 +22,27 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
 
 ## Closed
 
+### R14 — Boot re-verify trusted the session id alone, revoking a device whose other purchase was still paid — **Medium** — CLOSED 2026-11-04
+- **Was:** `reVerifyPlan` picked the `cs_...` session id over the restore
+  email whenever both were stored. A device holding both usually holds two
+  purchases; refunding the session's one revoked Pro on that device although
+  the email's purchase was unrefunded. Found and fixed in `our-family-lizard`
+  first ([#144](https://github.com/browningtons/our-family-lizard/pull/144),
+  A-R1 item 1); appkit carried the identical logic and is where adopters copy
+  it from.
+- **Why Medium:** a false revoke is the loud failure — the buyer paid twice
+  and lost access — but it needs two purchases on one device plus a refund of
+  the older one, so it is rare. The same change closes two Low companions:
+  a non-string stored handle crashed the re-verify (fail-open by accident,
+  not by design), and a revoke could land over a newer unlock's handle.
+- **Fixed by:** backlog **A19**. `kind: 'both'` plan, `applyBothReVerifyOutcome`
+  (keep if either verifies, revoke only if both say no, else fail open),
+  `typeof` guards on both handles, `revokeStillApplies` on the boot path.
+- **Verified:** `npm run verify` green, 164 tests; hook-level test renders
+  `useAuth` with both handles and shows Pro surviving a refunded session id
+  while the restore still verifies.
+
+
 ### R7 — The kit ships a refund promise that reads like finished copy — **Low** — CLOSED 2026-09-04
 - **Was:** `kit.config.example.ts` → `upgrade.trustLine`: *"Secure payment via
   Stripe. 30-day refund, no questions asked. No account. No recurring

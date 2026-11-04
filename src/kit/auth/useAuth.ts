@@ -3,7 +3,14 @@ import { load, save, remove } from '../persistence';
 import { useKitConfig } from '../use-kit-config';
 import { trackProPurchase, trackRestoreAttempt } from '../analytics';
 import { parseActivation } from '../activation';
-import { reVerifyPlan, applyReVerifyResponse, type ReVerifyAction } from './proReverify';
+import {
+  reVerifyPlan,
+  applyReVerifyResponse,
+  applyBothReVerifyOutcome,
+  revokeStillApplies,
+  type ProHandles,
+  type ReVerifyAction,
+} from './proReverify';
 
 const JUST_PURCHASED_KEY = 'just_purchased';
 // The email a successful restore was proved with — the only handle a
@@ -30,7 +37,8 @@ const LAST_VERIFIED_KEY = 'pro_last_verified_at';
  *   #admin                   → flips admin on
  *
  * Refund revocation: a boot re-verify (throttled to once per 24h) re-checks a
- * verified unlock — by session id, or by the restore email — against
+ * verified unlock — by session id, by the restore email, or both when the
+ * device holds both (Pro then survives while either purchase verifies) — against
  * `/api/verify-purchase`, and revokes Pro when the backend affirmatively
  * reports it is no longer entitled (a refund). It fails OPEN on any 429/5xx or
  * network error, so a flaky backend never strips Pro from a paying buyer.
@@ -180,9 +188,33 @@ export function useAuth() {
     });
     if (plan.kind === 'skip') return;
 
+    // Read fresh when the answer lands: the checkout verify above, a restore,
+    // or another tab can change the handles while this re-verify is out.
+    // Compared as stored, unparsed (see `ProHandles`).
+    const prefix = config.app.storagePrefix;
+    const readStored = (name: string): string | null => {
+      try {
+        return window.localStorage.getItem(`${prefix}${name}`);
+      } catch {
+        return null;
+      }
+    };
+    const storedHandles = (): ProHandles => ({
+      sessionId: readStored('stripe_session_id'),
+      restoreEmail: readStored(RESTORE_EMAIL_KEY),
+    });
+    // The handles this re-verify started from.
+    const checked = storedHandles();
+
     const settle = (action: ReVerifyAction) => {
       // fail open: leave Pro and the throttle untouched so we retry next mount.
       if (action.kind === 'fail_open') return;
+      if (action.kind === 'revoke' && !revokeStillApplies(checked, storedHandles())) {
+        // The handles changed while this was out: a newer unlock saved its
+        // own, so this answer isn't about what the device holds now, or a
+        // revoke already cleared them. Write nothing and leave that in place.
+        return;
+      }
       save(LAST_VERIFIED_KEY, Date.now());
       if (action.kind === 'revoke') {
         setIsProReal(false);
@@ -194,21 +226,34 @@ export function useAuth() {
 
     // Both paths hit /api/verify-purchase and return { verified: boolean };
     // read through the same wrapper so 429/5xx collapse to null → fail open.
-    const request =
-      plan.kind === 'session'
-        ? fetch(`/api/verify-purchase?session_id=${encodeURIComponent(plan.sessionId)}`)
-        : fetch('/api/verify-purchase', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ email: plan.email }),
-          });
+    const verifySession = (sessionId: string): Promise<ReVerifyAction> =>
+      fetch(`/api/verify-purchase?session_id=${encodeURIComponent(sessionId)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: { verified?: boolean } | null) => applyReVerifyResponse(data))
+        .catch(() => ({ kind: 'fail_open' }) as const);
+    const verifyRestore = (email: string): Promise<ReVerifyAction> =>
+      fetch('/api/verify-purchase', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: { verified?: boolean } | null) => applyReVerifyResponse(data))
+        .catch(() => ({ kind: 'fail_open' }) as const);
 
-    request
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { verified?: boolean } | null) => settle(applyReVerifyResponse(data)))
-      .catch(() => {
-        /* fail open: leave Pro intact and the throttle untouched */
-      });
+    if (plan.kind === 'session') {
+      verifySession(plan.sessionId).then(settle);
+    } else if (plan.kind === 'restore') {
+      verifyRestore(plan.email).then(settle);
+    } else {
+      // Device holds both a checkout session and a restore email — likely
+      // two different purchases. Check both and only revoke if neither still
+      // holds up (ported from our-family-lizard#144, A-R1 item 1).
+      Promise.all([verifySession(plan.sessionId), verifyRestore(plan.email)]).then(
+        ([sessionAction, restoreAction]) =>
+          settle(applyBothReVerifyOutcome(sessionAction, restoreAction)),
+      );
+    }
     // Mount-only. Admin viewAs toggling shouldn't trigger backend calls, and a
     // re-verify completing in this same effect doesn't need to re-fire.
     // eslint-disable-next-line react-hooks/exhaustive-deps
