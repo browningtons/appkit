@@ -47,8 +47,9 @@ let CONFIG: KitConfig | null = null;
 // app makes that promise on the adopter's behalf. Matching both keeps this
 // check correct regardless of which lands on main first. Brittle against
 // paraphrase, but brittle-but-loud beats silent-but-flexible for a legal
-// string (see appkit R7/A7).
-const PLACEHOLDER_TRUST_LINES = new Set([
+// string (see appkit R7/A7). Exported so `trustLinePlaceholders.test.ts` can
+// hold the repo's own shipped configs to the same set at test time.
+export const PLACEHOLDER_TRUST_LINES: ReadonlySet<string> = new Set([
   'Secure payment via Stripe. 30-day refund, no questions asked. No account. No recurring charges.',
   'REPLACE_ME: your refund and billing promise (e.g. "Secure payment via Stripe. 30-day refund. No account. No recurring charges.")',
 ]);
