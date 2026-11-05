@@ -9,22 +9,26 @@ export default defineConfig({
   // The demo site builds here so it never collides with the published library
   // in dist/ (the package's `exports` point at dist/).
   build: { outDir: 'demo-dist' },
-  // Floor, not a pin: a few points under the measured baseline. `include`
-  // makes the report cover every shipped file, not just ones a test happens
-  // to import — without it, src/kit/components/* and useEntitlement.ts had
-  // zero tests and were invisible to the old import-only report, which read
-  // 63/63/70/64 instead of the true 59/57/56/59 (found 2026-11-03, the A17
-  // "left open" gap).
+  // Vitest 4 removed `coverage.all` (and `coverage.extensions`). The v8
+  // provider only adds untested files when `coverage.include` is set, and the
+  // extensions have to be in that glob. Otherwise the report is just the
+  // files a test imported, and shipped files sit at "not measured" instead of
+  // 0%. That is what let them slip past the A17 floor.
+  //
+  // Floor, not a pin. Set 2026-11-03 a few points under the all-files
+  // baseline measured then (58.99% statements, 57% branches, 56.31% functions,
+  // 58.9% lines). The 2026-11-01 numbers (~63/63/70/64) only counted imported
+  // files. Remeasured on this tree: 70/67.6/66.37/70.28, still above the floor.
   test: {
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary'],
-      include: ['api/**/*.ts', 'src/**/*.{ts,tsx}'],
-      exclude: ['**/*.test.{ts,tsx}', 'src/main.tsx'],
+      include: ['src/**/*.{ts,tsx}', 'api/**/*.ts'],
+      exclude: ['**/*.d.ts'],
       thresholds: {
-        statements: 56,
+        statements: 55,
         branches: 54,
-        functions: 51,
+        functions: 52,
         lines: 55,
       },
     },

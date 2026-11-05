@@ -22,6 +22,71 @@ was a stale duplicate of the same item, never removed when it closed)
 
 ## Completed
 
+### A20 — CI holds both shipped configs to the trustLine placeholder set — 2026-11-04
+*(Meseeks card 2e36717e, filed by Trust Ledger on 2026-10-24 from PR #29;
+worked by an interactive session, not a lane run)*
+
+R7/A7 made `kit.config.example.ts`'s refund promise an obvious `REPLACE_ME`
+and added the `setKitConfig` console.error guard against both placeholder
+strings. The repo's own `kit.config.ts` (the demo `npm run dev` renders) kept
+the identical pre-R7 finished-looking promise for seven more weeks, because
+the runtime guard only ever logged on a dev run nobody reads; Trust Ledger
+fixed the copy by hand in #29 and asked for a build-time check so the next
+near-miss fails CI instead.
+
+`PLACEHOLDER_TRUST_LINES` in `src/kit/config.ts` is now exported (as a
+`ReadonlySet`, same contents). New `src/kit/trustLinePlaceholders.test.ts`
+reads both tracked configs off disk and asserts: the guard set still names
+both historical placeholders; `kit.config.ts` contains none of them and still
+says "Demo copy only"; `kit.config.example.ts` contains the `REPLACE_ME`
+placeholder and never the finished prose. A test rather than a grep step in
+`ci.yml` so it runs under `npm run verify` locally and in CI alike, and so a
+third placeholder added to the set is checked without touching the workflow.
+
+**Verified:** `npm run verify` green — lint, 150/150 tests, coverage
+63.1% statements / 69.8% functions (floor 60/65), build, 0 production
+vulnerabilities. Sanity-checked by pasting the pre-R7 prose back into
+`kit.config.ts`: the test fails naming the string; reverted.
+
+### A19 — Boot re-verify revoked Pro on a device holding both a session id and a restore email — 2026-11-04
+*(Meseeks card 0ce81e8b, filed by Revenue Rail on 2026-10-30 from our-family-lizard#144;
+worked by an interactive session, not a lane run)*
+
+`reVerifyPlan` preferred the `cs_...` session id whenever a device held one,
+so a device that bought once and later restored a *different* purchase by
+email was re-checked against the first purchase only. The moment that first
+purchase was refunded, the boot re-verify revoked Pro — even though the
+email's purchase was still paid. appkit is the reference kit for this flow
+(the header still says "Ported from our-family-lizard#44"), so every adopter
+that copied `proReverify.ts` inherited the false-revoke path. Two smaller
+gaps from the same OFL fix came along: `.startsWith`/`.trim` on a hand-edited
+non-string handle crashed the whole re-verify (OFL A-R1 item 10), and a revoke
+answered after a newer unlock had saved its own handle overwrote that unlock
+(OFL's `revokeStillApplies`).
+
+`src/kit/auth/proReverify.ts`: `reVerifyPlan` returns `{ kind: 'both' }` when
+both handles are on file and guards both handles' types before any string
+method; new `applyBothReVerifyOutcome` keeps Pro while *either* side verifies,
+revokes only when both affirmatively say no, and fails open on half an answer;
+new `revokeStillApplies` + `ProHandles` compare the handles as stored. `useAuth`'s
+boot effect fires the GET and the POST together for a `both` plan, combines
+them, and drops a revoke whose handles changed while it was out. The
+visibility re-check is unchanged (session-only, as before).
+
+**Verified:** `npm run verify` green — lint, 164/164 tests, coverage 67.8%
+statements / 78.1% functions (floor 60/65), build, 0 production
+vulnerabilities. `proReverify.test.ts` rewrites the one assertion that pinned
+the old preference and adds 11 (both-plan, non-string handles, every
+`applyBothReVerifyOutcome` combination, `revokeStillApplies`). New
+`useAuth.bootReverify.test.tsx` (6) renders the hook with both handles and
+checks the two requests go out together, Pro survives a refunded session while
+the restore verifies, revokes only when both fail, fails open on a 5xx or a
+thrown fetch, and drops a revoke after a newer session id was saved.
+
+**Left open:** the visibility re-check still asks the session id only; a
+restored-only device is re-checked on boot but not on refocus. OFL folded both
+into one `runReVerify`; worth the same here on a later Revenue Rail visit.
+
 ### A17 follow-up — coverage gate now scores every shipped file, not just imported ones — 2026-11-03
 *(Launch Shield; closes A17's own "Left open" gap, two days later)*
 
@@ -29,29 +94,24 @@ A17 (below) measured the baseline with vitest's default per-file v8 report,
 which only lists a file if some test imports it — it said so itself in "Left
 open": `src/kit/components/*.tsx`, `App.tsx`/`main.tsx`, `useEntitlement.ts`
 never showed up, so the true "every shipped file" number was unmeasured and
-"likely lower than 63%." It was: adding `coverage.include` (`api/**/*.ts`,
-`src/**/*.{ts,tsx}`, excluding tests and the demo's `main.tsx` boot file) so
-the v8 provider scores every matched file whether a test touches it or not
-dropped the measured baseline to **59.11% / 57% / 56.31% / 59.04%**
-(statements/branches/functions/lines) — five zero-coverage files included:
-`AdminBar.tsx`, `LockedOverlay.tsx`, `ProBadge.tsx`,
-`PurchaseConfirmation.tsx`, `UpgradeModal.tsx` (all five are exported,
-shipped kit components, not demo-only), plus `useEntitlement.ts` and the
-demo's `App.tsx`. Thresholds in `vite.config.ts` moved down to the new real
-floor: `56/54/51/55`, same "a few points under baseline" shape A17 used (the
-old `60/60/65/60` floor was sitting a few points under a number the gate
-couldn't actually see).
+"likely lower than 63%." It was. `coverage.include` is `src/**/*.{ts,tsx}`
+and `api/**/*.ts` (extensions in the glob; Vitest 4 removed `coverage.all`
+and `coverage.extensions`), with `**/*.d.ts` excluded so `src/stripe.d.ts`
+is not treated as a source file. Test files stay out via Vitest's built-in
+rule that appends `test.include` to `coverage.exclude`. The v8 provider then
+scores every matched shipped file whether a test touches it or not.
 
-(Vitest 4's `@vitest/coverage-v8` types no longer accept a `coverage.all`
-option — `include` alone is sufficient to pull in untouched files; `tsc -b`
-caught the stale `all: true` immediately, since `vite.config.ts` is itself
-type-checked by the build step.)
+Five exported kit components report 0%: `AdminBar.tsx`, `LockedOverlay.tsx`,
+`ProBadge.tsx`, `PurchaseConfirmation.tsx`, `UpgradeModal.tsx` (shipped kit,
+not demo-only), plus `useEntitlement.ts`, the demo's `App.tsx`, and
+`main.tsx`. The floor stays at main's `55/54/52/55` (this branch had proposed
+`56/54/51/55` against a run that also excluded `src/main.tsx`; functions 51
+is below main, and the merged report still clears 52, so the floor was not
+lowered).
 
-**Verified:** `npx vitest run --coverage` green at the new thresholds (147
-tests, 0 failures); sanity-checked both directions — bumping `statements` to
-95 in-place fails with `ERROR: Coverage for statements (59.11%) does not
-meet global threshold (95%)`, reverting passes clean. `npm run verify` green
-end to end (lint, coverage gate, build, `audit:deps` 0 vulnerabilities).
+**Verified:** `npx vitest run --coverage` on the merged tree — 171/171 tests,
+70% statements / 67.6% branches / 66.37% functions / 70.28% lines
+(357/510, 240/355, 75/113, 317/451), above the floor.
 
 **Left open:** the five zero-coverage kit components and `useEntitlement.ts`
 still have no tests — the gate now sees them and holds the line at the real
@@ -84,13 +144,56 @@ sanity-checked by temporarily setting `statements: 95` — failed with `ERROR:
 Coverage for statements (63.11%) does not meet global threshold (95%)` — then
 reverted to 60.
 
-**Left open:** `coverage.all` (report 0% for files no test touches at all)
-didn't surface `src/kit/components/*.tsx`, `App.tsx`/`main.tsx`,
-`useEntitlement.ts` etc. the way it does in other repos on this same vitest
-version — the per-file report only ever lists files a test actually imports,
-so the true "every shipped file" number is unmeasured and likely lower than
-63%. Didn't chase it inside this visit's budget; worth a follow-up before
-trusting this gate as a UI-coverage signal rather than a money-path-logic one.
+**Follow-up closed 2026-11-03:** `coverage.all` not surfacing untested UI
+was a Vitest 4 behavior change, not a missing `all: true`. Vitest 4.1.8 removed `coverage.all` and
+`coverage.extensions` ([vitest#7837](https://github.com/vitest-dev/vitest/pull/7837)).
+`@vitest/coverage-v8` adds untested files only when `coverage.include` is
+set, and only files that glob matches — with no `include`, the report stays
+limited to files a test imports, so `src/kit/components/*.tsx`, `App.tsx`,
+`main.tsx`, and `useEntitlement.ts` never entered the denominator. Setting
+`all: true` does nothing; the option is gone from `CoverageOptions`.
+
+`coverage.include` is now `src/**/*.{ts,tsx}` plus `api/**/*.ts` (extensions
+in the glob, since `coverage.extensions` is gone too), with `**/*.d.ts`
+excluded so `src/stripe.d.ts` is not treated as a source file. Test files
+stay out via Vitest's built-in rule that appends `test.include` to
+`coverage.exclude`. Reproduced before the change: 63.11/62.67/69.76/63.61,
+no component files in the table. After: those files report 0%, and the
+all-files baseline is 58.99% statements, 57% branches, 56.31% functions,
+58.9% lines (282/478, 183/321, 58/103, 248/421). The floor moved with that
+baseline, still a few points under: 55/54/52/55. Remeasured on this tree
+with those same include globs: 70% / 67.6% / 66.37% / 70.28%
+(357/510, 240/355, 75/113, 317/451). The floor stays 55/54/52/55.
+
+### A18 — Stop acking the webhook 200 when the entitlement/refund write actually failed — 2026-10-30
+*(Revenue Rail; closes R13 (High))*
+
+`api/stripe-webhook.ts`'s three event cases awaited `recordEntitlement`/
+`revokeByPaymentIntent` and ignored the boolean they return. Both functions
+swallow their own Supabase error by design (correct for their other caller,
+`verify-purchase.ts`'s best-effort confirmation write) — but the webhook has
+no buyer-facing response to protect, so a `false` there should mean "ack
+failure, let Stripe retry," not "ack success anyway." A write failure during
+`checkout.session.completed` meant a real buyer silently never got Pro; during
+`charge.refunded`/`charge.dispute.closed` (lost) it meant a refunded/charged-
+back buyer silently kept Pro — both forever, with Stripe's dashboard showing a
+clean delivery and no retry ever firing.
+
+Each case now throws when its write call returns `false`; the existing outer
+`catch` already 500s and logs for exactly this reason ("the handler is
+idempotent... Stripe retries"), so no new error-handling path was needed —
+just wiring the existing one up to the return value it was dropping.
+
+**Verified:** new `api/webhook-write-failure.test.ts` (4 tests) — a mocked
+Supabase write failure 500s for `checkout.session.completed`, `charge.refunded`,
+and `charge.dispute.closed`; confirmed red against the pre-fix handler (3 of 4
+failed `expected 200 to be 500` with the fix reverted); a successful write
+still acks 200/handled (no regression). `npm run verify` green (lint, 151/151
+tests, build, 0 production vulnerabilities); `npm run build:lib` green. Not
+verified against live/test Stripe (pack safety line).
+
+**Follow-up filed:** check `our-family-lizard` and `snowball-penguin`'s own
+Stripe webhooks for the same ignored-return-value shape.
 
 ### A12 — `UpgradeModal`'s close button and restore link are under the mobile tap-target minimum — 2026-10-21
 *(User Journey)*
