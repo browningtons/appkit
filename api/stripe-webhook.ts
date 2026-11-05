@@ -123,7 +123,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           expand: ['line_items'],
         });
         const row = entitlementFromSession(full, priceId, productId);
-        if (row) await recordEntitlement(row);
+        // recordEntitlement swallows its own error (logs, returns false) so
+        // verify-purchase's best-effort safety-net call never 500s a buyer
+        // who already has their `verified: true`. The webhook has no such
+        // buyer-facing response to protect — a write that didn't happen
+        // must not ack 200, or Stripe marks delivery successful and never
+        // retries, and a buyer who really paid is told "no purchase found"
+        // with no alert anywhere.
+        if (row && !(await recordEntitlement(row))) {
+          throw new Error('recordEntitlement failed for checkout.session.completed');
+        }
         break;
       }
       case 'charge.refunded': {
@@ -132,7 +141,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // refund on a $50 purchase must not revoke the whole entitlement.
         if (!isFullRefund(charge)) break;
         const pi = paymentIntentIdFromCharge(charge);
-        if (pi) await revokeByPaymentIntent(pi);
+        // Same ack-must-mean-written rule as above, the other direction: a
+        // refund that fails to revoke here keeps a refunded buyer's Pro
+        // forever, silently, with no retry.
+        if (pi && !(await revokeByPaymentIntent(pi))) {
+          throw new Error('revokeByPaymentIntent failed for charge.refunded');
+        }
         break;
       }
       case 'charge.dispute.closed': {
@@ -152,7 +166,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ? await stripe.charges.retrieve(dispute.charge)
             : dispute.charge;
         const pi = paymentIntentIdFromCharge(charge);
-        if (pi) await revokeByPaymentIntent(pi);
+        if (pi && !(await revokeByPaymentIntent(pi))) {
+          throw new Error('revokeByPaymentIntent failed for charge.dispute.closed');
+        }
         break;
       }
       default:

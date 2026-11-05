@@ -122,6 +122,36 @@ so the true "every shipped file" number is unmeasured and likely lower than
 63%. Didn't chase it inside this visit's budget; worth a follow-up before
 trusting this gate as a UI-coverage signal rather than a money-path-logic one.
 
+### A18 — Stop acking the webhook 200 when the entitlement/refund write actually failed — 2026-10-30
+*(Revenue Rail; closes R13 (High))*
+
+`api/stripe-webhook.ts`'s three event cases awaited `recordEntitlement`/
+`revokeByPaymentIntent` and ignored the boolean they return. Both functions
+swallow their own Supabase error by design (correct for their other caller,
+`verify-purchase.ts`'s best-effort confirmation write) — but the webhook has
+no buyer-facing response to protect, so a `false` there should mean "ack
+failure, let Stripe retry," not "ack success anyway." A write failure during
+`checkout.session.completed` meant a real buyer silently never got Pro; during
+`charge.refunded`/`charge.dispute.closed` (lost) it meant a refunded/charged-
+back buyer silently kept Pro — both forever, with Stripe's dashboard showing a
+clean delivery and no retry ever firing.
+
+Each case now throws when its write call returns `false`; the existing outer
+`catch` already 500s and logs for exactly this reason ("the handler is
+idempotent... Stripe retries"), so no new error-handling path was needed —
+just wiring the existing one up to the return value it was dropping.
+
+**Verified:** new `api/webhook-write-failure.test.ts` (4 tests) — a mocked
+Supabase write failure 500s for `checkout.session.completed`, `charge.refunded`,
+and `charge.dispute.closed`; confirmed red against the pre-fix handler (3 of 4
+failed `expected 200 to be 500` with the fix reverted); a successful write
+still acks 200/handled (no regression). `npm run verify` green (lint, 151/151
+tests, build, 0 production vulnerabilities); `npm run build:lib` green. Not
+verified against live/test Stripe (pack safety line).
+
+**Follow-up filed:** check `our-family-lizard` and `snowball-penguin`'s own
+Stripe webhooks for the same ignored-return-value shape.
+
 ### A12 — `UpgradeModal`'s close button and restore link are under the mobile tap-target minimum — 2026-10-21
 *(User Journey)*
 
