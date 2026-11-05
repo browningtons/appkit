@@ -31,10 +31,11 @@ Goal: every row ✅ with a pure unit test. Fill top-down by backlog rank.
   (`.github/workflows/ci.yml`) runs the same steps on push/PR to `main`.
 - Coverage floor (2026-11-03, A17 follow-up): statements 55% / branches 54% /
   functions 52% / lines 55%. Vitest 4 only counts untested files when
-  `coverage.include` lists them, so the 2026-11-01 floor (60/60/65/60) was
-  measured on imported files alone (~63/63/70/64) and let untested UI through.
-  The floor now sits a few points under the all-files baseline
-  (58.99/57/56.31/58.9). Regression guard, not a target.
+  `coverage.include` lists them (`src/**/*.{ts,tsx}`, `api/**/*.ts`), so the
+  2026-11-01 floor (60/60/65/60) was measured on imported files alone
+  (~63/63/70/64) and let untested UI through. Remeasured on the merged tree:
+  70% / 67.6% / 66.37% / 70.28%. The floor was not lowered. Regression guard,
+  not a target.
 - No dependency-audit step yet (A5). Watch the recurring **dompurify** CVE.
 
 ## Adopter drift (reference-repo duty)

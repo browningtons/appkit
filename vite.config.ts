@@ -12,12 +12,13 @@ export default defineConfig({
   // Vitest 4 removed `coverage.all` (and `coverage.extensions`). The v8
   // provider only adds untested files when `coverage.include` is set, and the
   // extensions have to be in that glob. Otherwise the report is just the
-  // files a test imported, and UI components sit at "not measured" instead of
+  // files a test imported, and shipped files sit at "not measured" instead of
   // 0%. That is what let them slip past the A17 floor.
   //
-  // Floor, not a pin: a few points under the all-files baseline measured
-  // 2026-11-03 (58.99% statements, 57% branches, 56.31% functions, 58.9%
-  // lines). The 2026-11-01 numbers (~63/63/70/64) only counted imported files.
+  // Floor, not a pin. Set 2026-11-03 a few points under the all-files
+  // baseline measured then (58.99% statements, 57% branches, 56.31% functions,
+  // 58.9% lines). The 2026-11-01 numbers (~63/63/70/64) only counted imported
+  // files. Remeasured on this tree: 70/67.6/66.37/70.28, still above the floor.
   test: {
     coverage: {
       provider: 'v8',

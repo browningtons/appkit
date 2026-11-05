@@ -87,6 +87,36 @@ thrown fetch, and drops a revoke after a newer session id was saved.
 restored-only device is re-checked on boot but not on refocus. OFL folded both
 into one `runReVerify`; worth the same here on a later Revenue Rail visit.
 
+### A17 follow-up — coverage gate now scores every shipped file, not just imported ones — 2026-11-03
+*(Launch Shield; closes A17's own "Left open" gap, two days later)*
+
+A17 (below) measured the baseline with vitest's default per-file v8 report,
+which only lists a file if some test imports it — it said so itself in "Left
+open": `src/kit/components/*.tsx`, `App.tsx`/`main.tsx`, `useEntitlement.ts`
+never showed up, so the true "every shipped file" number was unmeasured and
+"likely lower than 63%." It was. `coverage.include` is `src/**/*.{ts,tsx}`
+and `api/**/*.ts` (extensions in the glob; Vitest 4 removed `coverage.all`
+and `coverage.extensions`), with `**/*.d.ts` excluded so `src/stripe.d.ts`
+is not treated as a source file. Test files stay out via Vitest's built-in
+rule that appends `test.include` to `coverage.exclude`. The v8 provider then
+scores every matched shipped file whether a test touches it or not.
+
+Five exported kit components report 0%: `AdminBar.tsx`, `LockedOverlay.tsx`,
+`ProBadge.tsx`, `PurchaseConfirmation.tsx`, `UpgradeModal.tsx` (shipped kit,
+not demo-only), plus `useEntitlement.ts`, the demo's `App.tsx`, and
+`main.tsx`. The floor stays at main's `55/54/52/55` (this branch had proposed
+`56/54/51/55` against a run that also excluded `src/main.tsx`; functions 51
+is below main, and the merged report still clears 52, so the floor was not
+lowered).
+
+**Verified:** `npx vitest run --coverage` on the merged tree — 171/171 tests,
+70% statements / 67.6% branches / 66.37% functions / 70.28% lines
+(357/510, 240/355, 75/113, 317/451), above the floor.
+
+**Left open:** the five zero-coverage kit components and `useEntitlement.ts`
+still have no tests — the gate now sees them and holds the line at the real
+number, but closing the gap itself (writing tests for those files) is
+separate, larger work, not done in this visit.
 
 ### A17 — No coverage floor; `@vitest/coverage-v8` installed but never wired to a gate — 2026-11-01
 *(Launch Shield; promotes `debt-snowball-dolphin`'s coverage-threshold pattern into the reference kit)*
@@ -131,7 +161,9 @@ stay out via Vitest's built-in rule that appends `test.include` to
 no component files in the table. After: those files report 0%, and the
 all-files baseline is 58.99% statements, 57% branches, 56.31% functions,
 58.9% lines (282/478, 183/321, 58/103, 248/421). The floor moved with that
-baseline, still a few points under: 55/54/52/55.
+baseline, still a few points under: 55/54/52/55. Remeasured on this tree
+with those same include globs: 70% / 67.6% / 66.37% / 70.28%
+(357/510, 240/355, 75/113, 317/451). The floor stays 55/54/52/55.
 
 ### A18 — Stop acking the webhook 200 when the entitlement/refund write actually failed — 2026-10-30
 *(Revenue Rail; closes R13 (High))*
