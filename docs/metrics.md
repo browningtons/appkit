@@ -36,6 +36,10 @@ Goal: every row ✅ with a pure unit test. Fill top-down by backlog rank.
   (~63/63/70/64) and let untested UI through. Remeasured on the merged tree:
   70% / 67.6% / 66.37% / 70.28%. The floor was not lowered. Regression guard,
   not a target.
+- Coverage floor raised 2026-11-12 (A21) to statements 80% / branches 76% /
+  functions 81% / lines 81%, the measured 80 / 76.33 / 81.41 / 81.37 rounded
+  down, after the five kit components and `useEntitlement.ts` went from 0% to
+  100%.
 - No dependency-audit step yet (A5). Watch the recurring **dompurify** CVE.
 
 ## Adopter drift (reference-repo duty)
