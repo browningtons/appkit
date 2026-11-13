@@ -15,10 +15,12 @@ export default defineConfig({
   // files a test imported, and shipped files sit at "not measured" instead of
   // 0%. That is what let them slip past the A17 floor.
   //
-  // Floor, not a pin. Set 2026-11-03 a few points under the all-files
-  // baseline measured then (58.99% statements, 57% branches, 56.31% functions,
-  // 58.9% lines). The 2026-11-01 numbers (~63/63/70/64) only counted imported
-  // files. Remeasured on this tree: 70/67.6/66.37/70.28, still above the floor.
+  // A floor: raise it when coverage grows, never lower it. First set
+  // 2026-11-03 a few points under the all-files baseline then (58.99/57/
+  // 56.31/58.9). Raised 2026-11-12, once the five kit components and
+  // useEntitlement got tests, to the all-files numbers measured then
+  // rounded down (80% statements, 76.33% branches, 81.41% functions,
+  // 81.37% lines; up from 70/67.6/66.37/70.28).
   test: {
     coverage: {
       provider: 'v8',
@@ -26,10 +28,10 @@ export default defineConfig({
       include: ['src/**/*.{ts,tsx}', 'api/**/*.ts'],
       exclude: ['**/*.d.ts'],
       thresholds: {
-        statements: 55,
-        branches: 54,
-        functions: 52,
-        lines: 55,
+        statements: 80,
+        branches: 76,
+        functions: 81,
+        lines: 81,
       },
     },
   },

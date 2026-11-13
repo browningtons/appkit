@@ -22,6 +22,38 @@ was a stale duplicate of the same item, never removed when it closed)
 
 ## Completed
 
+### A21 — Kit components and `useEntitlement` get behavior tests; coverage floor raised — 2026-11-12
+*(Meseeks card, worked by an agent session; closes the A17 follow-up's "Left open")*
+
+The five exported kit components and `useEntitlement.ts` sat at 0%, and
+adopters copy them as-is. Each now has a `*.test.tsx` beside it, in the
+existing `react-dom/client` + `act` style: render, click, assert what the
+user sees and which callbacks fire. `UpgradeModal` covers the Buy Button vs
+Payment Link choice (empty, `REPLACE_ME` and `buy_btn_DEMO` ids fall back),
+UTM attribution into `client_reference_id`, and one `upgrade_shown` per
+source. `AdminBar` and `PurchaseConfirmation` are also driven through
+`useAuth` the way `App.tsx` wires them. All six files are now 100% on every
+metric.
+
+**Verified:** `npm run test:coverage`, 198 passed + 2 expected fail. Totals
+went from 70 / 67.6 / 66.37 / 70.28 to 80 / 76.33 / 81.41 / 81.37 (408/510,
+271/355, 92/113, 367/451). The floor rose to those numbers rounded down:
+80/76/81/81.
+
+**Known bug, not fixed:** `useEntitlement` lags `useAuth` by one write. It
+reads `pro` from localStorage during render, but `useAuth` writes it in a
+post-commit effect, and on the checkout-redirect mount that effect first
+writes back the stale `false`. So in the render where `useAuth` grants Pro, a
+nested `useEntitlement()` still says free, and in the render where a refund
+revokes it, still says Pro. Nothing re-renders it after. Pinned as two
+`it.fails` cases in `useEntitlement.test.tsx`, which fail once it is fixed.
+The fix needs entitlement shared through state or context, not one line.
+
+**Left open:** `LockedOverlay` is a clickable `div` (no role, focus or key
+handler), so keyboard users cannot trigger it. `UpgradeModal` has no
+`role="dialog"`, Escape-to-close or focus handling. `App.tsx`/`main.tsx`
+(demo only) are still 0%.
+
 ### A20 — CI holds both shipped configs to the trustLine placeholder set — 2026-11-04
 *(Meseeks card 2e36717e, filed by Trust Ledger on 2026-10-24 from PR #29;
 worked by an interactive session, not a lane run)*
