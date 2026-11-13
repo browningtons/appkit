@@ -216,7 +216,13 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
   predicate, so it was never affected — only the guest fallback scan had the
   short-circuit.
 
-### R10 — A failure line could log a buyer's Checkout Session id — **Medium** — CLOSED 2026-10-05 (pending merge)
+### R10 — A failure line could log a buyer's Checkout Session id — **Medium** — CLOSED 2026-10-05, merged 2026-10-06 via #23
+
+**Corrected 2026-11-12 — this header read "pending merge" for 37 days after
+#23 actually merged** (`gh pr view 23` → `mergedAt: 2026-10-06T04:48:39Z`,
+merge commit `3bdf6d90`). Not a retraction, the header was simply never updated
+after the merge.
+
 - **Was:** a Checkout Session id is a bearer credential in the kit: the
   checkout redirect's `#session_id=cs_…` goes to `GET /api/verify-purchase`,
   and a settled Pro session answers `{ verified: true }` on any device
