@@ -102,6 +102,31 @@ describe('LockedOverlay', () => {
     expect(onUpgrade).toHaveBeenCalledTimes(2);
   });
 
+  it('is reachable and operable by keyboard, not just a mouse click', async () => {
+    const onUpgrade = vi.fn();
+    await renderOverlay({ onUpgrade, label: 'Unlock the dashboard' });
+
+    const overlay = container.querySelector('[role="button"]') as HTMLElement;
+    expect(overlay).not.toBeNull();
+    expect(overlay.tabIndex).toBe(0);
+    expect(overlay.getAttribute('aria-label')).toBe('Unlock the dashboard');
+
+    await act(async () => {
+      overlay.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    expect(onUpgrade).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      overlay.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    });
+    expect(onUpgrade).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      overlay.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    });
+    expect(onUpgrade).toHaveBeenCalledTimes(2);
+  });
+
   it('fails loudly, naming the fix, when mounted outside KitProvider', async () => {
     // React reports the render error on the console as well as throwing it.
     vi.spyOn(console, 'error').mockImplementation(() => {});

@@ -161,6 +161,44 @@ describe('UpgradeModal', () => {
     expect(link?.getAttribute('href')).toBe('https://buy.stripe.com/test_abc');
   });
 
+  it('is an accessible dialog labelled by its own heading, with the close button focused on open', async () => {
+    await render(<UpgradeModal source="pdf_button" onClose={() => {}} onRestore={() => {}} />);
+
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog!.getAttribute('aria-modal')).toBe('true');
+    const labelledBy = dialog!.getAttribute('aria-labelledby');
+    expect(container.querySelector(`#${labelledBy}`)?.textContent).toBe('Unlock everything');
+    expect(document.activeElement).toBe(button('Close upgrade modal'));
+  });
+
+  it('closes on Escape', async () => {
+    const onClose = vi.fn();
+    await render(<UpgradeModal source="pdf_button" onClose={onClose} onRestore={() => {}} />);
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes when the backdrop is clicked, but not when the dialog card itself is clicked', async () => {
+    const onClose = vi.fn();
+    await render(<UpgradeModal source="pdf_button" onClose={onClose} onRestore={() => {}} />);
+
+    const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
+    await act(async () => {
+      dialog.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onClose).not.toHaveBeenCalled();
+
+    const backdrop = container.firstElementChild as HTMLElement;
+    await act(async () => {
+      backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("carries the visitor's UTMs to Stripe checkout and to the upgrade_shown event", async () => {
     window.history.replaceState(
       null,

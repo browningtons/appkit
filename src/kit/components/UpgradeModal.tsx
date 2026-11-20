@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { X, Zap, Check, ExternalLink } from 'lucide-react';
 import { useKitConfig } from '../use-kit-config';
 import { stripeUrlWithUtm, trackUpgradeShown } from '../analytics';
@@ -30,17 +30,38 @@ interface UpgradeModalProps {
  */
 export default function UpgradeModal({ onClose, onRestore, source }: UpgradeModalProps) {
   const { stripe, upgrade } = useKitConfig();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     trackUpgradeShown(source);
   }, [source]);
 
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[95vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="upgrade-modal-title"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[95vh] overflow-y-auto"
+      >
         {/* Header */}
         <div className="bg-gradient-to-br from-emerald-700 to-emerald-900 p-6 text-white text-center relative">
           <button
+            ref={closeButtonRef}
             onClick={onClose}
             className="absolute top-2 right-2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
             aria-label="Close upgrade modal"
@@ -50,7 +71,7 @@ export default function UpgradeModal({ onClose, onRestore, source }: UpgradeModa
           <div className="w-12 h-12 bg-amber-400 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg">
             <Zap size={24} className="text-amber-900" />
           </div>
-          <h2 className="text-xl font-bold mb-1">{upgrade.headerTitle}</h2>
+          <h2 id="upgrade-modal-title" className="text-xl font-bold mb-1">{upgrade.headerTitle}</h2>
           <p className="text-emerald-200 text-sm">{upgrade.headerSubtitle}</p>
         </div>
 
