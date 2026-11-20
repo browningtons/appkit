@@ -12,6 +12,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { KitProvider } from '../context';
 import type { KitConfig } from '../config';
 import { useAuth } from '../auth/useAuth';
+import { __resetLocalSaveStatusForTests, markLocalSaveRefused } from '../local-save-status';
 import PurchaseConfirmation from './PurchaseConfirmation';
 
 declare global {
@@ -84,6 +85,7 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+  __resetLocalSaveStatusForTests();
 });
 
 describe('PurchaseConfirmation', () => {
@@ -122,5 +124,24 @@ describe('PurchaseConfirmation', () => {
     // And it does not come back on the next load.
     await reload(<AppShell />);
     expect(container.textContent).not.toContain(BANNER_TEXT);
+  });
+
+  // R15: a full quota (or a browser blocking site data) can refuse the
+  // write that backs the unlock (the Stripe session id, the restore
+  // email), so a reload can silently cost the buyer their entitlement.
+  // Before this, the banner claimed Pro unconditionally with no sign that
+  // storage hadn't kept it.
+  it('warns when storage refused a write, since a reload could lose this', async () => {
+    markLocalSaveRefused();
+    await render(<PurchaseConfirmation onDismiss={() => {}} />);
+
+    expect(container.textContent).toContain(BANNER_TEXT);
+    expect(container.textContent).toContain('reload could lose this');
+  });
+
+  it('says nothing about storage when nothing was refused', async () => {
+    await render(<PurchaseConfirmation onDismiss={() => {}} />);
+
+    expect(container.textContent).not.toContain('reload could lose this');
   });
 });

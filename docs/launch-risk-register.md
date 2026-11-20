@@ -22,6 +22,41 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
 
 ## Closed
 
+### R15 — Purchase-confirmation banner never warned when storage refused the unlock write — **Medium** — CLOSED 2026-11-20
+- **Was:** `PurchaseConfirmation.tsx` showed "Payment received — Pro is
+  unlocked." unconditionally. `useAuth.ts` persists the entitlement handle
+  via `save('stripe_session_id', ...)` / `save(RESTORE_EMAIL_KEY, ...)`,
+  backed by a silent `try/catch` `localStorage.setItem` in
+  `persistence.ts` — no storage-failure signal existed anywhere in the kit.
+  A full quota or a browser blocking site data (private mode) can refuse
+  the write that backs the unlock; the buyer sees a confident Pro-unlocked
+  banner with nothing durably saved, and a reload can silently cost them
+  the purchase. Same gap `our-family-lizard` closed first
+  ([#170](https://github.com/browningtons/our-family-lizard/pull/170),
+  A-R1 item 3); filed here by Revenue Rail's periodic visit 2026-11-15
+  (Meseeks `aca7b14a`) as a reference-repo-first fix rather than
+  copy-pasted per adopter.
+- **Why Medium:** doesn't block the unlock itself (Stripe already charged
+  the card) and needs a quota/private-mode edge to trigger, but when it
+  does the buyer gets no warning and a later reload or refund re-check can
+  silently revoke what they paid for.
+- **Fixed:** new `local-save-status.ts` — a page-sticky signal with no
+  dependency beyond a `Set` of listeners — and `use-local-save-refused.ts`
+  (`useSyncExternalStore`). `persistence.ts`'s `save()` marks the signal on
+  its existing catch branch instead of just dropping the write silently.
+  `PurchaseConfirmation.tsx` shows a conditional warning line, worded to
+  hedge ("could") since the signal is page-wide, not write-specific, and
+  points at what's actually reachable from that banner (free space / leave
+  private browsing, then reload) — not Restore, which lives in
+  `UpgradeModal`, not here.
+- **Verified:** `npm run lint`, `npm run typecheck`, `npm test` (209
+  passed, 2 expected-fail — 11 new), `npm run test:coverage` (80.57/76.6/
+  82.5/81.85%, above the 80/76/81/81 floor), `npm run build`, all green.
+  New tests: `local-save-status.test.ts` (flip-once, sticky, unsubscribe),
+  `persistence.test.ts` (a mocked `QuotaExceededError` on `setItem` marks
+  the signal without `save()` throwing), `PurchaseConfirmation.test.tsx`
+  (banner warns when refused, says nothing when not).
+
 ### R14 — Boot re-verify trusted the session id alone, revoking a device whose other purchase was still paid — **Medium** — CLOSED 2026-11-04
 - **Was:** `reVerifyPlan` picked the `cs_...` session id over the restore
   email whenever both were stored. A device holding both usually holds two
