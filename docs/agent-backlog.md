@@ -22,6 +22,32 @@ was a stale duplicate of the same item, never removed when it closed)
 
 ## Completed
 
+### A23 — Purchase-confirmation banner never warned when storage refused the unlock write — 2026-11-20
+*(Revenue Rail; closes R15, filed 2026-11-15 as Meseeks `aca7b14a`)*
+
+Sibling of `our-family-lizard`'s [#170](https://github.com/browningtons/our-family-lizard/pull/170)
+(pack/revenue-rail, A-R1 item 3). appkit had no storage-refusal signal at
+all, so this is the reference-repo-first version of that fix rather than a
+port: new `src/kit/local-save-status.ts` (sticky flag + listener set) and
+`src/kit/use-local-save-refused.ts` (`useSyncExternalStore`); `persistence.ts`'s
+`save()` marks the signal on its existing silent catch instead of just
+swallowing the write; `PurchaseConfirmation.tsx` shows a conditional warning
+line when the signal is set.
+
+**Verified:** `npm run lint`, `npm run typecheck`, `npm test` (11 new,
+all passing), `npm run test:coverage` (clears the 80/76/81/81 floor),
+`npm run build` — all green. See **R15** in the risk register for the
+full test list and numbers.
+
+**Left open:** adopters who build their own post-purchase UI (rather than
+using `PurchaseConfirmation` as shipped) don't get this warning for free —
+`use-local-save-refused.ts` isn't in the public `index.ts` export surface
+yet. Not done here to keep this change to the one component that needed
+it; export it if/when an adopter asks. Numbered A23, skipping A22 — that
+number is already claimed by User Journey's open PR #39 on this same
+"## Completed" insertion point; expect a trivial merge conflict here
+whichever of the two lands second, not a content collision.
+
 ### A21 — Kit components and `useEntitlement` get behavior tests; coverage floor raised — 2026-11-12
 *(Meseeks card, worked by an agent session; closes the A17 follow-up's "Left open")*
 

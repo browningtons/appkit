@@ -3,6 +3,7 @@
 // general persistence library; consuming apps own their own storage shape.
 
 import { getKitConfig } from './config';
+import { markLocalSaveRefused } from './local-save-status';
 
 function key(name: string): string {
   return `${getKitConfig().app.storagePrefix}${name}`;
@@ -21,7 +22,10 @@ export function save(name: string, val: unknown): void {
   try {
     localStorage.setItem(key(name), JSON.stringify(val));
   } catch {
-    /* private mode / quota — drop silently, same as OFL */
+    // Private mode / quota — drop silently, same as OFL, but flag it (R15)
+    // so a UI that cares (e.g. PurchaseConfirmation) can warn instead of
+    // claiming an unlock that nothing durably saved.
+    markLocalSaveRefused();
   }
 }
 
