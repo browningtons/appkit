@@ -182,6 +182,32 @@ describe('UpgradeModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('traps Tab focus inside the dialog instead of escaping to the page behind it', async () => {
+    await render(<UpgradeModal source="pdf_button" onClose={() => {}} onRestore={() => {}} />);
+
+    const closeBtn = button('Close upgrade modal')!;
+    const restoreBtn = button('Already purchased? Restore')!;
+    expect(document.activeElement).toBe(closeBtn);
+
+    // Shift+Tab from the first focusable element wraps to the last.
+    restoreBtn.focus();
+    const shiftTabFromFirst = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true });
+    closeBtn.focus();
+    await act(async () => {
+      document.dispatchEvent(shiftTabFromFirst);
+    });
+    expect(shiftTabFromFirst.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(restoreBtn);
+
+    // Tab from the last focusable element wraps back to the first.
+    const tabFromLast = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
+    await act(async () => {
+      document.dispatchEvent(tabFromLast);
+    });
+    expect(tabFromLast.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(closeBtn);
+  });
+
   it('closes when the backdrop is clicked, but not when the dialog card itself is clicked', async () => {
     const onClose = vi.fn();
     await render(<UpgradeModal source="pdf_button" onClose={onClose} onRestore={() => {}} />);

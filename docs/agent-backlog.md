@@ -54,12 +54,31 @@ that `document.activeElement` is the close button on mount, that a real
 `Escape` keydown closes it, and that a backdrop click closes while a click
 on the card itself does not.
 
-**Left open:** no focus trap — Tab still cycles out of the modal into the
-page behind it (needs a focus-trap utility or a `<dialog>` element rewrite,
-bigger than this visit's scope). `AdminBar`'s 5-tap-logo admin toggle has
-the same keyboard-reachability gap as `LockedOverlay` did; not touched here
-since it's an internal/admin surface, not the first-run buyer path — worth a
-look on condition it's ever exposed to a non-admin.
+~~**Left open:** no focus trap — Tab still cycles out of the modal into the
+page behind it (needs a focus-trap utility or a `<dialog>` element
+rewrite, bigger than this visit's scope).~~ Fixed 2026-11-22, A23.
+`AdminBar`'s 5-tap-logo admin toggle has the same keyboard-reachability
+gap as `LockedOverlay` did; not touched here since it's an internal/admin
+surface, not the first-run buyer path — worth a look on condition it's
+ever exposed to a non-admin.
+
+### A23 — `UpgradeModal` had no focus trap — 2026-11-22
+*(User Journey; closes A22's "Left open" note)*
+
+Tab and Shift+Tab inside the open modal walked focus out into the page
+behind it — the buy/restore flow is a dead end for a keyboard-only user
+once they tab past the last control. `UpgradeModal`'s existing `keydown`
+listener (already there for Escape) now also intercepts `Tab`: at the
+last focusable element it wraps to the first, and `Shift+Tab` at the
+first wraps to the last, using a live `querySelectorAll` over the
+dialog's own `button, a[href], [tabindex]` so it keeps working regardless
+of which CTA (Stripe Buy Button vs. Payment Link) is rendered.
+
+**Verified:** `npm run verify` (lint, coverage, build, audit) all green;
+203 passed + 2 expected-fail (unchanged), coverage unchanged at the
+80/76/81/81 floor (`UpgradeModal.tsx` itself now 93.5/87/100/100). New
+test drives real `Tab`/`Shift+Tab` `KeyboardEvent`s and asserts focus
+wraps both directions and `preventDefault` fires.
 
 ### A21 — Kit components and `useEntitlement` get behavior tests; coverage floor raised — 2026-11-12
 *(Meseeks card, worked by an agent session; closes the A17 follow-up's "Left open")*
