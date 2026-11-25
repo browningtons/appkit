@@ -22,6 +22,28 @@ was a stale duplicate of the same item, never removed when it closed)
 
 ## Completed
 
+### A25 — Boot re-verify's unconditional revoke branch had no `unlocksHere` guard — 2026-11-25
+*(Revenue Rail; closes R16, filed 2026-11-22 as Meseeks `cba7b907`)*
+
+Found porting `our-family-lizard`'s A-R1 item 3 fix
+([#174](https://github.com/browningtons/our-family-lizard/pull/174)) to this
+kit: `revokeStillApplies` reads `held === checked` as true when a brand-new
+in-tab unlock's own `save()` throws (full quota — R15's failure mode, since
+storage never actually moved), so the unconditional revoke branch in
+`useAuth.ts`'s `settle()` could still wipe Pro the server had just confirmed
+in this very tab. Added an `unlocksHere` ref, incremented at every in-tab
+unlock (`#pro=1`, `session_id` checkout verify, `handleRestore`); the boot
+re-verify effect captures `unlocksAtStart` and the unconditional branch now
+requires `unlocksHere.current === unlocksAtStart` before revoking — the same
+protection the dropped-handles branch already had implicitly via storage.
+Scoped to this one gap, not the rest of the A-R1 series (items 1/4/5/9/10
+already live here under A19/A20 or don't apply to this kit's architecture).
+
+**Verified:** new regression test in `useAuth.bootReverify.test.tsx`
+(mocked `QuotaExceededError` on `Storage.prototype.setItem`), confirmed red
+against the pre-fix code and green after; full `npm run verify` — lint, 210
+passed + 2 expected-fail, build, `npm audit --omit=dev` 0 vulnerabilities.
+
 ### A23 — Purchase-confirmation banner never warned when storage refused the unlock write — 2026-11-20
 *(Revenue Rail; closes R15, filed 2026-11-15 as Meseeks `aca7b14a`)*
 

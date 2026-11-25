@@ -22,6 +22,39 @@ exhaustive. Severity: P0 (blocks launch / loses money now) · High · Medium · 
 
 ## Closed
 
+### R16 — Boot re-verify's unconditional revoke branch had no `unlocksHere` guard, so a quota-blocked in-tab unlock could still be wiped — **Medium** — CLOSED 2026-11-25
+- **Was:** the boot re-verify's `settle()` had two revoke paths: the
+  dropped-handles branch (handles changed since `checked` was captured —
+  write nothing) and, when `revokeStillApplies` read `true`, an
+  unconditional branch that revoked without checking anything else.
+  `revokeStillApplies` compares stored handles, so it also reads `true` when
+  a brand-new in-tab unlock's own `save('stripe_session_id', ...)` throws
+  (full quota / private mode, R15's failure mode): storage never moved off
+  the old handle, so a stale re-check of *that* old handle can still revoke
+  Pro the server just confirmed in this very tab. Found porting
+  our-family-lizard's A-R1 item 3 fix ([#174](https://github.com/browningtons/our-family-lizard/pull/174))
+  to the reference kit (Meseeks `cba7b907`, filed 2026-11-22) — appkit never
+  got that hardening series at all, and its dropped-handles branch didn't
+  carry the extra `unlocksHere` check either, so this was the one gap with
+  no guard on either side.
+- **Why Medium:** needs a purchase + a quota/private-mode write failure +
+  an unrelated stale revoke landing in the same tab session — rare, but
+  when it lines up the buyer paid and the UI (post-R15) even warns the save
+  failed, then the entitlement itself disappears anyway.
+- **Fixed by:** `unlocksHere` ref in `useAuth.ts`, incremented at every
+  in-tab unlock (`#pro=1` activation, `session_id` checkout verify,
+  `handleRestore`); the boot re-verify effect captures `unlocksAtStart` and
+  the unconditional revoke branch now checks
+  `unlocksHere.current === unlocksAtStart` before writing, mirroring the
+  guard the dropped-handles branch already effectively had via storage.
+  Ported minimally — not the full A-R1 series (items 1/4/5/9/10 already
+  live here under different names, or don't apply to this kit's
+  architecture); scoped to the one proven gap.
+- **Verified:** new regression test in `useAuth.bootReverify.test.tsx`
+  (quota-mocked `Storage.prototype.setItem`, confirmed red against the
+  pre-fix code, green after); full `npm run verify` — lint, 210 passed + 2
+  expected-fail, build, `npm audit --omit=dev` 0 vulnerabilities.
+
 ### R15 — Purchase-confirmation banner never warned when storage refused the unlock write — **Medium** — CLOSED 2026-11-20
 - **Was:** `PurchaseConfirmation.tsx` showed "Payment received — Pro is
   unlocked." unconditionally. `useAuth.ts` persists the entitlement handle
