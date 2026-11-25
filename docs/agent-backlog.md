@@ -20,6 +20,30 @@ was a stale duplicate of the same item, never removed when it closed)
 
 ### ~~A8~~ CLOSED 2026-08-25 — flipped by hand with `workflow` scope (see Completed)
 
+### A24 — `main` has no branch protection, so a red `verify` run merges exactly as easily as a green one — needs-paul
+**Score: 7** — Impact 4, Confidence 5, Risk Reduction 3, Effort 1
+
+`gh api repos/browningtons/appkit/branches/main -q .protected` → **`false`**,
+and `gh api repos/browningtons/appkit/rulesets` → **`[]`** (checked
+2026-11-25). CI (`.github/workflows/ci.yml`) runs `lint` → `test:coverage`
+(with the A17/A21 coverage floor) → `build` → `audit:deps` on every PR, but
+nothing on GitHub's side requires that job to pass before a merge — a red
+PR merges to `main` identically to a green one, silently. appkit is the
+reference kit every adopter (`our-family-lizard`, `snowball-penguin`,
+`golden-data-app`'s siblings) copies, so a bad merge here that nobody
+noticed would ship to the next repo that pulls from it.
+
+Same shape as `golden-data-app`'s A5, found 2026-09-18: the pack's GitHub
+token 403s on `POST /repos/.../rulesets` (confirmed again here — tried
+creating a minimal deletion/non-fast-forward ruleset, same 403
+`"Resource not accessible by personal access token"`), so this needs Paul's
+hand, not a PR. **Fix:** add a ruleset on `main` with `required_status_checks`
+naming the `verify` job from `ci.yml`, plus `deletion` and
+`non_fast_forward` rules (matching `golden-data-app`'s A5 proposal).
+**Verify:** `gh api repos/browningtons/appkit/branches/main -q .protected`
+→ `true`, and `gh api repos/browningtons/appkit/rulesets -q
+'.[].rules[].type'` includes `required_status_checks`.
+
 ## Completed
 
 ### A21 — Kit components and `useEntitlement` get behavior tests; coverage floor raised — 2026-11-12
