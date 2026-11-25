@@ -22,6 +22,54 @@ was a stale duplicate of the same item, never removed when it closed)
 
 ## Completed
 
+### A25 — Boot re-verify's unconditional revoke branch had no `unlocksHere` guard — 2026-11-25
+*(Revenue Rail; closes R16, filed 2026-11-22 as Meseeks `cba7b907`)*
+
+Found porting `our-family-lizard`'s A-R1 item 3 fix
+([#174](https://github.com/browningtons/our-family-lizard/pull/174)) to this
+kit: `revokeStillApplies` reads `held === checked` as true when a brand-new
+in-tab unlock's own `save()` throws (full quota — R15's failure mode, since
+storage never actually moved), so the unconditional revoke branch in
+`useAuth.ts`'s `settle()` could still wipe Pro the server had just confirmed
+in this very tab. Added an `unlocksHere` ref, incremented at every in-tab
+unlock (`#pro=1`, `session_id` checkout verify, `handleRestore`); the boot
+re-verify effect captures `unlocksAtStart` and the unconditional branch now
+requires `unlocksHere.current === unlocksAtStart` before revoking — the same
+protection the dropped-handles branch already had implicitly via storage.
+Scoped to this one gap, not the rest of the A-R1 series (items 1/4/5/9/10
+already live here under A19/A20 or don't apply to this kit's architecture).
+
+**Verified:** new regression test in `useAuth.bootReverify.test.tsx`
+(mocked `QuotaExceededError` on `Storage.prototype.setItem`), confirmed red
+against the pre-fix code and green after; full `npm run verify` — lint, 210
+passed + 2 expected-fail, build, `npm audit --omit=dev` 0 vulnerabilities.
+
+### A23 — Purchase-confirmation banner never warned when storage refused the unlock write — 2026-11-20
+*(Revenue Rail; closes R15, filed 2026-11-15 as Meseeks `aca7b14a`)*
+
+Sibling of `our-family-lizard`'s [#170](https://github.com/browningtons/our-family-lizard/pull/170)
+(pack/revenue-rail, A-R1 item 3). appkit had no storage-refusal signal at
+all, so this is the reference-repo-first version of that fix rather than a
+port: new `src/kit/local-save-status.ts` (sticky flag + listener set) and
+`src/kit/use-local-save-refused.ts` (`useSyncExternalStore`); `persistence.ts`'s
+`save()` marks the signal on its existing silent catch instead of just
+swallowing the write; `PurchaseConfirmation.tsx` shows a conditional warning
+line when the signal is set.
+
+**Verified:** `npm run lint`, `npm run typecheck`, `npm test` (11 new,
+all passing), `npm run test:coverage` (clears the 80/76/81/81 floor),
+`npm run build` — all green. See **R15** in the risk register for the
+full test list and numbers.
+
+**Left open:** adopters who build their own post-purchase UI (rather than
+using `PurchaseConfirmation` as shipped) don't get this warning for free —
+`use-local-save-refused.ts` isn't in the public `index.ts` export surface
+yet. Not done here to keep this change to the one component that needed
+it; export it if/when an adopter asks. Numbered A23, skipping A22 — that
+number is already claimed by User Journey's open PR #39 on this same
+"## Completed" insertion point; expect a trivial merge conflict here
+whichever of the two lands second, not a content collision.
+
 ### A21 — Kit components and `useEntitlement` get behavior tests; coverage floor raised — 2026-11-12
 *(Meseeks card, worked by an agent session; closes the A17 follow-up's "Left open")*
 

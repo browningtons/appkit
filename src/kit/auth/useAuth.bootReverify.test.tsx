@@ -190,4 +190,61 @@ describe('useAuth boot re-verify with both handles', () => {
     expect(localStorage.getItem('test_stripe_session_id')).toBe(JSON.stringify('cs_test_newer'));
     expect(localStorage.getItem('test_pro_last_verified_at')).toBeNull();
   });
+
+  it("keeps Pro when this tab's own checkout verify lands first but a full quota refuses the write, so a stale revoke of the old handle can't follow it", async () => {
+    // Device holds only an old, now-refunded session. Boot re-verify for it
+    // is in flight when this same tab's URL activation (a fresh checkout
+    // return) verifies a NEW purchase — but `save('stripe_session_id', ...)`
+    // never lands (a full quota), so storage keeps naming the old session.
+    // `revokeStillApplies` then reads `held === checked` (both still old) and
+    // takes the unconditional revoke branch below, which — without the
+    // `unlocksHere` guard — wiped the Pro state the new purchase had just set
+    // in this very tab.
+    localStorage.clear();
+    localStorage.setItem('test_pro', 'true');
+    localStorage.setItem('test_stripe_session_id', JSON.stringify('cs_test_old'));
+    window.history.replaceState(null, '', '/?session_id=cs_test_new');
+
+    let resolveOld!: (value: unknown) => void;
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes('cs_test_new')) return respond(true);
+      if (url.includes('cs_test_old')) {
+        return new Promise((resolve) => {
+          resolveOld = resolve;
+        });
+      }
+      return respond(null);
+    });
+
+    const realSetItem = Storage.prototype.setItem;
+    const quotaFull = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(
+      function (this: Storage, key: string, value: string) {
+        if (this === window.localStorage) throw new DOMException('quota', 'QuotaExceededError');
+        return realSetItem.call(this, key, value);
+      },
+    );
+
+    await mount();
+
+    // The new checkout's verify landed (isProReal is true in-memory from it),
+    // but its own save() calls were refused — storage still names the old,
+    // soon-to-be-refunded session.
+    expect(readIsProReal()).toBe(true);
+    expect(localStorage.getItem('test_stripe_session_id')).toBe(JSON.stringify('cs_test_old'));
+
+    quotaFull.mockRestore();
+    await act(async () => {
+      resolveOld({ ok: true, json: async () => ({ verified: false }) });
+    });
+    for (let i = 0; i < 4; i++) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+
+    // This tab's own checkout verify already confirmed the new purchase is
+    // paid; the old session's refund answer is about a purchase this tab has
+    // moved past, quota or not.
+    expect(readIsProReal()).toBe(true);
+  });
 });

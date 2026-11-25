@@ -69,6 +69,12 @@ export function useAuth() {
 
   const logoTapCount = useRef(0);
   const logoTapTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Unlocks this tab made itself: the `#pro=1` / `session_id` activation
+  // above, or a restore below. The server told this tab those purchases are
+  // paid, so a boot re-verify that started before one of them never takes
+  // this tab's Pro by following storage — storage can lag an in-tab unlock
+  // when its own save() throws (full quota, private mode).
+  const unlocksHere = useRef(0);
 
   const markJustPurchased = useCallback(() => {
     setJustPurchased(true);
@@ -100,6 +106,7 @@ export function useAuth() {
     );
 
     if (pro) {
+      unlocksHere.current += 1;
       setIsProReal(true); // eslint-disable-line react-hooks/set-state-in-effect
       save('pro', true);
       markJustPurchased();
@@ -110,6 +117,7 @@ export function useAuth() {
         .then((r) => (r.ok ? r.json() : null))
         .then((data: { verified?: boolean } | null) => {
           if (data?.verified) {
+            unlocksHere.current += 1;
             setIsProReal(true);
             save('pro', true);
             save('stripe_session_id', sessionId);
@@ -205,6 +213,7 @@ export function useAuth() {
     });
     // The handles this re-verify started from.
     const checked = storedHandles();
+    const unlocksAtStart = unlocksHere.current;
 
     const settle = (action: ReVerifyAction) => {
       // fail open: leave Pro and the throttle untouched so we retry next mount.
@@ -216,6 +225,13 @@ export function useAuth() {
         return;
       }
       save(LAST_VERIFIED_KEY, Date.now());
+      // `revokeStillApplies` reads `true` here too when a newer unlock in
+      // this tab couldn't persist its own handle (a full quota): storage
+      // never changed, so `checked` still matches it, and this branch would
+      // otherwise revoke a purchase the server just confirmed in this very
+      // tab. Guard it the same way the dropped-handles branch above protects
+      // against the same race when storage *did* change.
+      if (action.kind === 'revoke' && unlocksHere.current !== unlocksAtStart) return;
       if (action.kind === 'revoke') {
         setIsProReal(false);
         save('pro', false);
@@ -304,6 +320,7 @@ export function useAuth() {
       });
       const data = (await resp.json()) as { verified?: boolean };
       if (data.verified) {
+        unlocksHere.current += 1;
         setIsProReal(true);
         save('pro', true);
         // Keep the email as the handle so the boot re-verify can revoke this
