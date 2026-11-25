@@ -825,3 +825,64 @@ launch-shield]` follow-up once the script exists. **Risk:** low; the main
 hazard is scope creep into re-deriving the whole risk register as code when
 only two real adopters exist today — hold the line at the checks already
 proven to recur.
+
+## Radical bets — 2026-W48 (Jobs-to-be-done)
+
+_(Learning Loop wolf, weekly Pathfinder pass — proposals for Paul to select,_
+_NOT auto-build. 2026-11-25, W48, lens = Jobs-to-be-done: what is the_
+_adopting developer actually hiring appkit to do, and where does it quietly_
+_fail at that job?)_
+
+**The bet: appkit's upgrade contract only has an inbound half — adopters are
+hired to "bump the pinned tag" (`README.md:88-91`) when a fix ships, but
+nothing on either side ever tells them a fix shipped.** The forensic pattern
+across R1, R9, R11, R14, R15, R16 is identical and one-directional: a
+money-path bug gets found and fixed in `our-family-lizard` or
+`debt-snowball-ant` first, then ported into appkit weeks later — "appkit was
+the last carrier" is this backlog's own recurring phrase. What's never
+happened once is the reverse: a fix landing in appkit and *reaching* either
+adopter without a human filing a follow-up by hand. The job adopters hired
+appkit for was "security fixes propagate by bumping the version — no copied
+code to keep in sync," which is a push promise, but the only mechanism today
+is a human remembering to check a pinned git-tag dependency, which nobody
+does. Why now: this is the mirror image of the W41 bet above (which fixes
+the kit *catching up* to adopters) and of the still-unbuilt `kit:doctor`
+(which would check local config health, not version staleness) — neither
+touches the outbound direction, so this is a genuinely open lane, not a
+repropose. **Smallest first slice:** not tooling — a single `CHANGELOG.md`
+with one line per merged fix PR (R-number, one sentence, semver-ish tag
+bump), which doesn't exist anywhere in the repo today (confirmed absent).
+That alone turns "did I miss a fix" from an archaeology exercise into a
+five-second diff-the-tags check, and is a prerequisite for any later
+`kit:doctor --check-upstream` idea. **Risk:** low effort, medium discipline —
+a changelog only works if every future fix PR remembers to add a line to it,
+i.e. it's a second place to forget, not a structural fix; the structural
+version (an actual version-check subcommand) is a larger bet deliberately
+left for later, once the changelog proves the discipline sticks.
+
+**Supporting bet: the post-purchase moment — the single highest-stakes UI
+render in the whole kit — is exactly where the kit's own known gaps
+cluster, and nobody's connected them as one job failure.** `useEntitlement`
+is documented as lagging `useAuth` by one render on the checkout-redirect
+mount (two pinned `it.fails` tests), and `src/kit/local-save-status.ts` /
+`src/kit/use-local-save-refused.ts` (the fix for "purchase banner never
+warned on a refused storage write") exist but are not re-exported from the
+public `src/kit/index.ts` — confirmed by reading the export list directly —
+so an adopter building any custom post-purchase UI, which is the most likely
+thing an adopter customizes, inherits neither protection. The job here isn't
+"unlock Pro," it's "tell the user, truthfully, in the three seconds after
+they pay, whether it worked" — and the kit's own test suite admits it
+doesn't reliably do that yet. **Smallest first slice:** export
+`local-save-status.ts`'s hook from `src/kit/index.ts` — one line, zero
+behavior change — so the fix that exists stops being server-mode's
+equivalent of unexported dead code. **Risk:** low; this is the cheap,
+mechanical half of a bigger "fix the race too" bet that's deliberately not
+proposed here since it already has two pinned failing tests acting as a
+guard — exporting the hook is the only part with no test coverage
+pretending to own it yet.
+
+**Spiciest: the upgrade-contract bet above.** It indicts the kit's core
+pitch rather than a corner of its code — "no copied code to keep in sync
+across apps" is sold as the reason to adopt appkit at all (`README.md:88-91`),
+and the evidence says the sync is still entirely manual and has failed
+silently at least six times.
