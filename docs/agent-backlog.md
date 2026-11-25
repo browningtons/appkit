@@ -22,6 +22,87 @@ was a stale duplicate of the same item, never removed when it closed)
 
 ## Completed
 
+### A24 — `PurchaseConfirmation`'s dismiss button was under the mobile tap-target minimum — 2026-11-25
+*(User Journey; same class of gap A12 fixed for `UpgradeModal`, missed here)*
+
+A12 (2026-10-21) bumped `UpgradeModal`'s close button from 32px to the 44px
+tap-target minimum because it's a bottom-sheet modal on mobile by default.
+`PurchaseConfirmation` — the banner that fires right after a real Stripe
+purchase, the buyer's first confirmation the gate actually cleared — had the
+same shape of button at `w-7 h-7` (28px), smaller than the one A12 already
+fixed, and sits at the very top of the viewport on a fresh mobile load. Not
+provably broken (still registers a tap), but a 28px dismiss on the one
+screen every paying buyer sees is exactly the near-miss A12 was written to
+close everywhere.
+
+Bumped to `w-11 h-11` (44px), with `-mr-2` so the larger hit area doesn't
+visually push the icon further from the banner's edge — the same offset
+trick A12 used (`top-3`→`top-2`) to keep the icon's visual position stable
+while growing its tap area.
+
+**Verified:** `npm run verify` (lint, coverage, build, audit) all green;
+203 passed + 2 expected-fail (unchanged), coverage unchanged at the
+80/76/82/82 floor. No rendered-pixel assertion added — same precedent as
+A12, a code-read + Tailwind-class proof, not a rendered one.
+
+### A22 — The gate itself was unreachable by keyboard — 2026-11-20
+*(User Journey; closes half of A21's "Left open" note)*
+
+A21 (below) flagged it in passing while adding coverage, but it had shipped
+unnoticed since the kit's first commit: `LockedOverlay` — the overlay every
+adopter puts over every premium panel — was a bare `<div onClick>`. No
+`role`, no `tabIndex`, no key handler. A keyboard or switch-access user
+tabbing through the page skips over it entirely; there is no way to discover
+*why* a panel is locked or to open the upgrade modal without a pointer. Once
+open, `UpgradeModal` compounded the same failure: no `role="dialog"` /
+`aria-modal`, nothing moved focus into it (a screen-reader user stayed on
+whatever they were doing before it appeared), Escape did nothing, and
+clicking the dimmed backdrop — the one dismissal every user expects a modal
+to honor — did nothing either, so a confused tap outside the card just felt
+broken.
+
+`LockedOverlay` is now `role="button"` with `tabIndex={0}`, an `aria-label`
+matching its visible text, and an `onKeyDown` that treats Enter/Space like a
+click (focus ring via `focus-visible:ring-2`). `UpgradeModal`'s card is
+`role="dialog" aria-modal="true" aria-labelledby` pointing at its own `<h2>`;
+a mount effect focuses the close button and a `keydown` listener closes on
+Escape; the backdrop closes on click only when the click target *is* the
+backdrop (clicks inside the card no longer bubble into a false close).
+
+**Verified:** `npm run lint`, `npm test` (202 passed, 2 expected-fail,
+unchanged), `npm run build` all green. New tests: `LockedOverlay.test.tsx`
+drives Enter/Space/Tab via real `KeyboardEvent`s and asserts `tabIndex`/
+`aria-label`; `UpgradeModal.test.tsx` asserts the dialog role/labelling,
+that `document.activeElement` is the close button on mount, that a real
+`Escape` keydown closes it, and that a backdrop click closes while a click
+on the card itself does not.
+
+~~**Left open:** no focus trap — Tab still cycles out of the modal into the
+page behind it (needs a focus-trap utility or a `<dialog>` element
+rewrite, bigger than this visit's scope).~~ Fixed 2026-11-22, A23.
+`AdminBar`'s 5-tap-logo admin toggle has the same keyboard-reachability
+gap as `LockedOverlay` did; not touched here since it's an internal/admin
+surface, not the first-run buyer path — worth a look on condition it's
+ever exposed to a non-admin.
+
+### A23 — `UpgradeModal` had no focus trap — 2026-11-22
+*(User Journey; closes A22's "Left open" note)*
+
+Tab and Shift+Tab inside the open modal walked focus out into the page
+behind it — the buy/restore flow is a dead end for a keyboard-only user
+once they tab past the last control. `UpgradeModal`'s existing `keydown`
+listener (already there for Escape) now also intercepts `Tab`: at the
+last focusable element it wraps to the first, and `Shift+Tab` at the
+first wraps to the last, using a live `querySelectorAll` over the
+dialog's own `button, a[href], [tabindex]` so it keeps working regardless
+of which CTA (Stripe Buy Button vs. Payment Link) is rendered.
+
+**Verified:** `npm run verify` (lint, coverage, build, audit) all green;
+203 passed + 2 expected-fail (unchanged), coverage unchanged at the
+80/76/81/81 floor (`UpgradeModal.tsx` itself now 93.5/87/100/100). New
+test drives real `Tab`/`Shift+Tab` `KeyboardEvent`s and asserts focus
+wraps both directions and `preventDefault` fires.
+
 ### A21 — Kit components and `useEntitlement` get behavior tests; coverage floor raised — 2026-11-12
 *(Meseeks card, worked by an agent session; closes the A17 follow-up's "Left open")*
 
@@ -49,10 +130,10 @@ revokes it, still says Pro. Nothing re-renders it after. Pinned as two
 `it.fails` cases in `useEntitlement.test.tsx`, which fail once it is fixed.
 The fix needs entitlement shared through state or context, not one line.
 
-**Left open:** `LockedOverlay` is a clickable `div` (no role, focus or key
+**Left open:** ~~`LockedOverlay` is a clickable `div` (no role, focus or key
 handler), so keyboard users cannot trigger it. `UpgradeModal` has no
-`role="dialog"`, Escape-to-close or focus handling. `App.tsx`/`main.tsx`
-(demo only) are still 0%.
+`role="dialog"`, Escape-to-close or focus handling.~~ Fixed 2026-11-20, A22.
+`App.tsx`/`main.tsx` (demo only) are still 0%.
 
 ### A20 — CI holds both shipped configs to the trustLine placeholder set — 2026-11-04
 *(Meseeks card 2e36717e, filed by Trust Ledger on 2026-10-24 from PR #29;

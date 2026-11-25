@@ -161,6 +161,70 @@ describe('UpgradeModal', () => {
     expect(link?.getAttribute('href')).toBe('https://buy.stripe.com/test_abc');
   });
 
+  it('is an accessible dialog labelled by its own heading, with the close button focused on open', async () => {
+    await render(<UpgradeModal source="pdf_button" onClose={() => {}} onRestore={() => {}} />);
+
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog!.getAttribute('aria-modal')).toBe('true');
+    const labelledBy = dialog!.getAttribute('aria-labelledby');
+    expect(container.querySelector(`#${labelledBy}`)?.textContent).toBe('Unlock everything');
+    expect(document.activeElement).toBe(button('Close upgrade modal'));
+  });
+
+  it('closes on Escape', async () => {
+    const onClose = vi.fn();
+    await render(<UpgradeModal source="pdf_button" onClose={onClose} onRestore={() => {}} />);
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('traps Tab focus inside the dialog instead of escaping to the page behind it', async () => {
+    await render(<UpgradeModal source="pdf_button" onClose={() => {}} onRestore={() => {}} />);
+
+    const closeBtn = button('Close upgrade modal')!;
+    const restoreBtn = button('Already purchased? Restore')!;
+    expect(document.activeElement).toBe(closeBtn);
+
+    // Shift+Tab from the first focusable element wraps to the last.
+    restoreBtn.focus();
+    const shiftTabFromFirst = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true });
+    closeBtn.focus();
+    await act(async () => {
+      document.dispatchEvent(shiftTabFromFirst);
+    });
+    expect(shiftTabFromFirst.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(restoreBtn);
+
+    // Tab from the last focusable element wraps back to the first.
+    const tabFromLast = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
+    await act(async () => {
+      document.dispatchEvent(tabFromLast);
+    });
+    expect(tabFromLast.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(closeBtn);
+  });
+
+  it('closes when the backdrop is clicked, but not when the dialog card itself is clicked', async () => {
+    const onClose = vi.fn();
+    await render(<UpgradeModal source="pdf_button" onClose={onClose} onRestore={() => {}} />);
+
+    const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
+    await act(async () => {
+      dialog.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onClose).not.toHaveBeenCalled();
+
+    const backdrop = container.firstElementChild as HTMLElement;
+    await act(async () => {
+      backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("carries the visitor's UTMs to Stripe checkout and to the upgrade_shown event", async () => {
     window.history.replaceState(
       null,

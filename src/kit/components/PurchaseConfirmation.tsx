@@ -27,7 +27,7 @@ export default function PurchaseConfirmation({ onDismiss }: PurchaseConfirmation
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss"
-          className="w-7 h-7 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors flex-shrink-0"
+          className="w-11 h-11 -mr-2 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors flex-shrink-0"
         >
           <X size={14} />
         </button>
