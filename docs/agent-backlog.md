@@ -22,6 +22,29 @@ was a stale duplicate of the same item, never removed when it closed)
 
 ## Completed
 
+### A24 — `PurchaseConfirmation`'s dismiss button was under the mobile tap-target minimum — 2026-11-25
+*(User Journey; same class of gap A12 fixed for `UpgradeModal`, missed here)*
+
+A12 (2026-10-21) bumped `UpgradeModal`'s close button from 32px to the 44px
+tap-target minimum because it's a bottom-sheet modal on mobile by default.
+`PurchaseConfirmation` — the banner that fires right after a real Stripe
+purchase, the buyer's first confirmation the gate actually cleared — had the
+same shape of button at `w-7 h-7` (28px), smaller than the one A12 already
+fixed, and sits at the very top of the viewport on a fresh mobile load. Not
+provably broken (still registers a tap), but a 28px dismiss on the one
+screen every paying buyer sees is exactly the near-miss A12 was written to
+close everywhere.
+
+Bumped to `w-11 h-11` (44px), with `-mr-2` so the larger hit area doesn't
+visually push the icon further from the banner's edge — the same offset
+trick A12 used (`top-3`→`top-2`) to keep the icon's visual position stable
+while growing its tap area.
+
+**Verified:** `npm run verify` (lint, coverage, build, audit) all green;
+203 passed + 2 expected-fail (unchanged), coverage unchanged at the
+80/76/82/82 floor. No rendered-pixel assertion added — same precedent as
+A12, a code-read + Tailwind-class proof, not a rendered one.
+
 ### A22 — The gate itself was unreachable by keyboard — 2026-11-20
 *(User Journey; closes half of A21's "Left open" note)*
 
