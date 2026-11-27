@@ -1,7 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { X, Zap, Check, ExternalLink } from 'lucide-react';
 import { useKitConfig } from '../use-kit-config';
 import { stripeUrlWithUtm, trackUpgradeShown } from '../analytics';
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"]), stripe-buy-button';
 
 /**
  * The Buy Button web component requires a Stripe-dashboard-created Buy
@@ -30,27 +33,78 @@ interface UpgradeModalProps {
  */
 export default function UpgradeModal({ onClose, onRestore, source }: UpgradeModalProps) {
   const { stripe, upgrade } = useKitConfig();
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     trackUpgradeShown(source);
   }, [source]);
 
+  // Move focus into the dialog on open and return it to the trigger on close.
+  useEffect(() => {
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeButtonRef.current?.focus();
+    return () => {
+      if (previouslyFocused?.isConnected) {
+        previouslyFocused.focus();
+      }
+    };
+  }, []);
+
+  // Escape closes the modal; Tab wraps within the dialog's focusable controls.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusables = dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+      if (!focusables || focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const activeInside = dialogRef.current?.contains(document.activeElement);
+      if (!activeInside) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[95vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[95vh] overflow-y-auto"
+      >
         {/* Header */}
         <div className="bg-gradient-to-br from-emerald-700 to-emerald-900 p-6 text-white text-center relative">
           <button
+            ref={closeButtonRef}
+            type="button"
             onClick={onClose}
             className="absolute top-2 right-2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
             aria-label="Close upgrade modal"
           >
-            <X size={16} />
+            <X size={16} aria-hidden="true" />
           </button>
           <div className="w-12 h-12 bg-amber-400 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-            <Zap size={24} className="text-amber-900" />
+            <Zap size={24} className="text-amber-900" aria-hidden="true" />
           </div>
-          <h2 className="text-xl font-bold mb-1">{upgrade.headerTitle}</h2>
+          <h2 id={titleId} className="text-xl font-bold mb-1">{upgrade.headerTitle}</h2>
           <p className="text-emerald-200 text-sm">{upgrade.headerSubtitle}</p>
         </div>
 
@@ -65,7 +119,7 @@ export default function UpgradeModal({ onClose, onRestore, source }: UpgradeModa
           <div className="space-y-2">
             {upgrade.features.map((f) => (
               <div key={f} className="flex items-center gap-2.5 text-sm text-stone-600">
-                <Check size={14} className="text-emerald-500 flex-shrink-0" />
+                <Check size={14} className="text-emerald-500 flex-shrink-0" aria-hidden="true" />
                 {f}
               </div>
             ))}
@@ -85,7 +139,7 @@ export default function UpgradeModal({ onClose, onRestore, source }: UpgradeModa
               className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold rounded-lg shadow-md transition-colors"
             >
               Buy now — {upgrade.price}
-              <ExternalLink size={14} />
+              <ExternalLink size={14} aria-hidden="true" />
             </a>
           )}
         </div>
@@ -93,6 +147,7 @@ export default function UpgradeModal({ onClose, onRestore, source }: UpgradeModa
         {/* Restore */}
         <div className="px-6 pb-5 text-center">
           <button
+            type="button"
             onClick={onRestore}
             className="min-h-[44px] inline-flex items-center justify-center px-3 text-[11px] text-stone-400 hover:text-stone-600 underline underline-offset-2 transition-colors"
           >

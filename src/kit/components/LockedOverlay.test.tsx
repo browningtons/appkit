@@ -102,6 +102,24 @@ describe('LockedOverlay', () => {
     expect(onUpgrade).toHaveBeenCalledTimes(2);
   });
 
+  it('renders as a focusable native button so keyboard users can trigger it', async () => {
+    const onUpgrade = vi.fn();
+    await renderOverlay({ onUpgrade });
+
+    const btn = container.querySelector('button');
+    expect(btn).not.toBeNull();
+    expect(btn!.type).toBe('button');
+    expect(btn!.tabIndex).toBe(0);
+
+    btn!.focus();
+    expect(document.activeElement).toBe(btn);
+
+    await act(async () => {
+      btn!.click();
+    });
+    expect(onUpgrade).toHaveBeenCalledTimes(1);
+  });
+
   it('fails loudly, naming the fix, when mounted outside KitProvider', async () => {
     // React reports the render error on the console as well as throwing it.
     vi.spyOn(console, 'error').mockImplementation(() => {});

@@ -137,15 +137,7 @@ Use `trackEvent(name, data)` for app-specific events. The kit doesn't try to be 
 
 ## Skills
 
-Claude Code skills for the work every app repeats. They aren't part of the npm package; link them into `~/.claude/skills` to use them in any repo.
-
-| Skill | What it does |
-|---|---|
-| [`brand-kit`](./skills/brand-kit/SKILL.md) | Audits an app's artwork against a professional kit, then builds `favicon.ico`, the search favicon, the Apple touch icon, and PWA and maskable icons from one master drawing (`scripts/build_icons.py`, Python + Pillow) |
-
-```bash
-ln -s "$PWD/skills/brand-kit" ~/.claude/skills/brand-kit
-```
+The companion methodology skills (`app-design-port`, `app-voice`, `brand-kit`, `launch-checklist`, `persona-walkthrough`) live in [`browningtons/claude-skills`](https://github.com/browningtons/claude-skills) and install into both Claude Code and Codex via `./bin/link-skills.sh`. `brand-kit` (artwork audit + platform icon generator) moved there so every shared skill stays in one repo.
 
 ## Roadmap
 

@@ -1,17 +1,13 @@
 // @vitest-environment jsdom
 //
 // useEntitlement is the read-only Pro check for deeply nested components
-// (a ProBadge in a list row, a hidden menu item). It reads the purchase
-// useAuth stored on this device, so these pin that it is false for a device
+// (a ProBadge in a list row, a hidden menu item). It reads the live
+// entitlement state KitProvider shares with useAuth, initialized from the
+// purchase stored on this device. These pin that it is false for a device
 // that never bought, true from a stored purchase, scoped to this app's
-// storagePrefix (two kit apps on one origin must not unlock each other), and
-// closed, not open, when the stored value is unreadable.
-//
-// The two `it.fails` cases at the bottom are a KNOWN BUG, left unfixed on
-// purpose: useEntitlement reads localStorage during render, but useAuth
-// writes `pro` in a post-commit effect, so the render where useAuth grants
-// or revokes Pro still sees the old value, and nothing re-renders it after.
-// When that is fixed these start failing; flip them to `it`.
+// storagePrefix (two kit apps on one origin must not unlock each other),
+// closed when the stored value is unreadable, loud outside <KitProvider>,
+// and in lockstep with useAuth on the exact render a grant or revoke lands.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, type ReactNode } from 'react';
@@ -98,6 +94,7 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('useEntitlement', () => {
@@ -133,16 +130,25 @@ describe('useEntitlement', () => {
     expect(badge()).toBe('free');
   });
 
-  describe('KNOWN BUG: lags useAuth by one write', () => {
-    it.fails('agrees with useAuth in the render where a checkout redirect grants Pro', async () => {
+  it('fails loudly, naming the fix, when called outside KitProvider', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(
+      act(async () => {
+        root.render(<NestedBadge />);
+      }),
+    ).rejects.toThrow('useEntitlement must be used inside <KitProvider>');
+  });
+
+  describe('stays in sync with useAuth on the same render', () => {
+    it('agrees with useAuth in the render where a checkout redirect grants Pro', async () => {
       window.history.replaceState(null, '', '/#pro=1');
       await render(<AppShell />);
 
-      // Today: { auth: 'pro', nested: 'free' } until something re-renders it.
       expect(bothViews()).toEqual({ auth: 'pro', nested: 'pro' });
     });
 
-    it.fails('agrees with useAuth in the render where a refund revokes Pro', async () => {
+    it('agrees with useAuth in the render where a refund revokes Pro', async () => {
       // A buyer whose checkout session is on this device and was re-checked
       // just now, so only the refocus re-verify below fires.
       localStorage.setItem('test_pro', 'true');
@@ -162,8 +168,6 @@ describe('useEntitlement', () => {
         await Promise.resolve();
       });
 
-      // Today: { auth: 'free', nested: 'pro' }: the refunded buyer still sees
-      // Pro in nested components until something re-renders them.
       expect(bothViews()).toEqual({ auth: 'free', nested: 'free' });
     });
   });
