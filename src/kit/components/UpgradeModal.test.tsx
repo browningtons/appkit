@@ -190,4 +190,92 @@ describe('UpgradeModal', () => {
       ],
     ]);
   });
+
+  it('exposes dialog semantics labelled by its heading', async () => {
+    await render(<UpgradeModal source="pdf_button" onClose={() => {}} onRestore={() => {}} />);
+
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog!.getAttribute('aria-modal')).toBe('true');
+    const titleId = dialog!.getAttribute('aria-labelledby');
+    expect(titleId).toBeTruthy();
+    expect(document.getElementById(titleId!)?.textContent).toBe('Unlock everything');
+  });
+
+  it('closes on Escape and ignores unrelated keys', async () => {
+    const onClose = vi.fn();
+    await render(<UpgradeModal source="pdf_button" onClose={onClose} onRestore={() => {}} />);
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+    });
+    expect(onClose).not.toHaveBeenCalled();
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('moves focus into the dialog on open, traps Tab, and restores focus on close', async () => {
+    const trigger = document.createElement('button');
+    trigger.textContent = 'Open upgrade';
+    document.body.appendChild(trigger);
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+
+    try {
+      await render(
+        <UpgradeModal source="pdf_button" onClose={() => {}} onRestore={() => {}} />,
+        makeConfig(''),
+      );
+
+      const closeBtn = button('Close upgrade modal')!;
+      const restoreBtn = button('Already purchased? Restore')!;
+      expect(document.activeElement).toBe(closeBtn);
+
+      // Shift+Tab from the first control wraps to the last control.
+      await act(async () => {
+        document.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }),
+        );
+      });
+      expect(document.activeElement).toBe(restoreBtn);
+
+      // Tab from the last control wraps back to the first control.
+      await act(async () => {
+        document.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }),
+        );
+      });
+      expect(document.activeElement).toBe(closeBtn);
+
+      // If focus drifts outside the dialog (e.g. clicking backdrop/body),
+      // Tab pulls it back into the dialog instead of escaping behind it.
+      closeBtn.blur();
+      expect(document.activeElement).toBe(document.body);
+      await act(async () => {
+        document.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }),
+        );
+      });
+      expect(document.activeElement).toBe(closeBtn);
+
+      closeBtn.blur();
+      await act(async () => {
+        document.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }),
+        );
+      });
+      expect(document.activeElement).toBe(restoreBtn);
+
+      // Unmounting restores focus to the button that opened the modal.
+      await act(async () => {
+        root.render(null);
+      });
+      expect(document.activeElement).toBe(trigger);
+    } finally {
+      trigger.remove();
+    }
+  });
 });

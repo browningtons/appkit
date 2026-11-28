@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { load, save, remove } from '../persistence';
 import { useKitConfig } from '../use-kit-config';
+import { useEntitlementContext } from '../context-internal';
 import { trackProPurchase, trackRestoreAttempt } from '../analytics';
 import { parseActivation } from '../activation';
 import {
@@ -54,7 +55,7 @@ export function useAuth() {
 
   const [isAdmin, setIsAdmin] = useState(() => load('admin', false));
   const [viewAs, setViewAs] = useState<'admin' | 'user'>('admin');
-  const [isProReal, setIsProReal] = useState(() => load('pro', false));
+  const { isProReal, setIsProReal } = useEntitlementContext();
   const [upgradeSource, setUpgradeSource] = useState<string | null>(null);
 
   const openUpgrade = useCallback((source: string) => setUpgradeSource(source), []);
@@ -100,9 +101,9 @@ export function useAuth() {
     );
 
     if (pro) {
-      setIsProReal(true); // eslint-disable-line react-hooks/set-state-in-effect
+      setIsProReal(true);
       save('pro', true);
-      markJustPurchased();
+      markJustPurchased(); // eslint-disable-line react-hooks/set-state-in-effect
       window.history.replaceState(null, '', window.location.pathname);
     }
     if (sessionId) {
@@ -133,10 +134,6 @@ export function useAuth() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    save('pro', isProReal);
-  }, [isProReal]);
-
   // Re-verify the purchase when the tab regains visibility. The activation
   // effect above calls /api/verify-purchase exactly once — on the mount that
   // carries the Stripe redirect — so a refund processed while this tab sat
@@ -165,7 +162,7 @@ export function useAuth() {
     };
     document.addEventListener('visibilitychange', recheck);
     return () => document.removeEventListener('visibilitychange', recheck);
-  }, [isProReal]);
+  }, [isProReal, setIsProReal]);
   useEffect(() => {
     save('admin', isAdmin);
   }, [isAdmin]);
@@ -324,7 +321,7 @@ export function useAuth() {
       trackRestoreAttempt(false);
       alert('Something went wrong verifying your purchase. Try again in a moment.');
     }
-  }, []);
+  }, [setIsProReal]);
 
   return {
     isAdmin,

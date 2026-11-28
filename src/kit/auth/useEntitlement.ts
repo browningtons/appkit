@@ -6,11 +6,11 @@
 // future entitlement modes (server-backed subscriptions) can be swapped
 // in here without touching the consuming components.
 
-import { load } from '../persistence';
+import { useEntitlementContext } from '../context-internal';
 
 export function useEntitlement(): { isPro: boolean } {
-  // Same source of truth as useAuth's persistence write. We deliberately
-  // don't share state here — useAuth owns mutations; this is a peek.
-  const isPro = load<boolean>('pro', false);
-  return { isPro };
+  // Reads the same live state KitProvider shares with useAuth, so grants
+  // and revocations propagate in the same render without a localStorage lag.
+  const { isProReal } = useEntitlementContext();
+  return { isPro: isProReal };
 }

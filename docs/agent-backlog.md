@@ -22,6 +22,32 @@ was a stale duplicate of the same item, never removed when it closed)
 
 ## Completed
 
+### A22 — Fix `useEntitlement` state lag, close component a11y gaps, migrate `brand-kit`, prep `v1.1.0` — 2026-11-25
+*(Closes A21's "Known bug" and "Left open" accessibility items)*
+
+- **Entitlement sync:** Moved `isProReal`/`setIsProReal` into `KitProvider` via
+  `EntitlementContext` (`src/kit/context-internal.ts`, `src/kit/context.tsx`),
+  with a `lastSavedPro` guard so mount never clobbers a redirect-time write.
+  Both `useAuth` and `useEntitlement` now read the same live React state;
+  flipped both `it.fails` tests in `src/kit/auth/useEntitlement.test.tsx` to
+  passing `it(...)` tests and added a missing-provider check.
+- **Accessibility:** Converted `LockedOverlay` from a clickable `div` to a
+  native focusable `<button type="button">` with an inset `focus-visible` ring.
+  Added `role="dialog"`, `aria-modal="true"`, `aria-labelledby`, Escape-to-close,
+  initial focus + restore-on-unmount, and Tab/Shift+Tab trapping (including when
+  focus drifts outside the dialog) to `UpgradeModal`.
+- **Skill consolidation:** Removed the duplicate `skills/brand-kit/` copy (moved
+  to `browningtons/claude-skills` for Claude Code + Codex linking) and pointed
+  `README.md` there.
+- **Version:** Bumped `package.json` / `package-lock.json` to `1.1.0` (first
+  release since `v1.0.0`, 41+ additive/hardening commits ahead).
+
+**Verified:** `npm run lint`, `npm run test:coverage` (205 passed, 0 expected
+fail; totals 81.5 / 77.02 / 82.5 / 82.99, floor raised to 81/77/82/82),
+`npm run build`, and `npm run build:lib` green. Independent adversarial review
+caught two issues (backdrop-click Tab escape in `UpgradeModal`, leaked
+`console.error` spy in `useEntitlement.test.tsx`); both fixed and re-verified.
+
 ### A21 — Kit components and `useEntitlement` get behavior tests; coverage floor raised — 2026-11-12
 *(Meseeks card, worked by an agent session; closes the A17 follow-up's "Left open")*
 
